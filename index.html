@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>FlashSend — BSC Token Sender</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            font-family: 'Segoe UI', 'Poppins', 'Inter', system-ui, -apple-system, sans-serif;
+            padding: 20px;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Анимированный фон */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle at 20% 50%, rgba(0, 255, 255, 0.05) 0%, transparent 50%);
+            animation: aurora 15s infinite ease-in-out;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        @keyframes aurora {
+            0%, 100% { transform: translate(0%, 0%) rotate(0deg); opacity: 0.3; }
+            50% { transform: translate(10%, -10%) rotate(5deg); opacity: 0.6; }
+        }
+
+        /* Glassmorphic контейнер */
+        .container {
+            max-width: 650px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 2;
+        }
+
+        /* Заголовок */
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            animation: slideDown 0.6s ease;
+        }
+
+        .logo {
+            font-size: 48px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fff, #00ffaa, #00aaff);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-shadow: 0 0 30px rgba(0,255,170,0.3);
+            letter-spacing: -1px;
+        }
+
+        .sub {
+            color: rgba(255,255,255,0.7);
+            font-size: 14px;
+            margin-top: 8px;
+        }
+
+        /* Карточка */
+        .card {
+            background: rgba(15, 20, 35, 0.7);
+            backdrop-filter: blur(20px);
+            border-radius: 32px;
+            padding: 32px;
+            border: 1px solid rgba(255,255,255,0.15);
+            box-shadow: 0 25px 45px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.05) inset;
+            transition: all 0.3s;
+            animation: fadeInUp 0.5s ease;
+        }
+
+        /* Группы полей */
+        .input-group {
+            margin-bottom: 24px;
+            position: relative;
+        }
+
+        .input-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: rgba(255,255,255,0.9);
+            letter-spacing: 0.5px;
+        }
+
+        .input-label i {
+            font-size: 18px;
+        }
+
+        input, textarea {
+            width: 100%;
+            padding: 14px 18px;
+            background: rgba(0,0,0,0.4);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 20px;
+            color: white;
+            font-size: 15px;
+            transition: all 0.2s;
+            font-family: monospace;
+            backdrop-filter: blur(5px);
+        }
+
+        textarea {
+            resize: vertical;
+            font-family: monospace;
+        }
+
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #00ffaa;
+            box-shadow: 0 0 0 3px rgba(0,255,170,0.1);
+            background: rgba(0,0,0,0.6);
+        }
+
+        /* Кнопки */
+        .btn {
+            width: 100%;
+            padding: 14px 20px;
+            border: none;
+            border-radius: 24px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #00ffaa, #00aaff);
+            color: #0a0a1a;
+            box-shadow: 0 5px 15px rgba(0,255,170,0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,255,170,0.5);
+        }
+
+        .btn-secondary {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: white;
+            backdrop-filter: blur(10px);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255,255,255,0.2);
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Результат */
+        .result-area {
+            margin-top: 24px;
+            padding: 20px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 24px;
+            border-left: 3px solid #00ffaa;
+            font-family: monospace;
+            font-size: 13px;
+            max-height: 300px;
+            overflow-y: auto;
+            color: #ccffdd;
+        }
+
+        /* Предупреждение */
+        .warning {
+            background: rgba(255,100,0,0.15);
+            border: 1px solid rgba(255,100,0,0.3);
+            border-radius: 20px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            backdrop-filter: blur(5px);
+        }
+
+        .warning-icon {
+            font-size: 24px;
+        }
+
+        /* Анимации */
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Скроллбар */
+        .result-area::-webkit-scrollbar {
+            width: 6px;
+        }
+        .result-area::-webkit-scrollbar-track {
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+        }
+        .result-area::-webkit-scrollbar-thumb {
+            background: #00ffaa;
+            border-radius: 10px;
+        }
+
+        /* Статус */
+        .status-badge {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #00ffaa;
+            animation: pulse 1.5s infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        /* Стили для токена */
+        .token-meta {
+            display: flex;
+            gap: 10px;
+            margin-top: 8px;
+            font-size: 12px;
+            color: #aaa;
+        }
+
+        .gas-info {
+            background: rgba(0,255,170,0.1);
+            border-radius: 12px;
+            padding: 8px 12px;
+            font-size: 11px;
+            margin-top: 8px;
+            display: inline-block;
+        }
+
+        @media (max-width: 600px) {
+            .card {
+                padding: 20px;
+            }
+            .logo {
+                font-size: 36px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">⚡ FLASHSEND</div>
+            <div class="sub">BSC Token Sender • Auto Gas • Lightning Fast</div>
+        </div>
+
+        <div class="card">
+            <div class="warning">
+                <div class="warning-icon">🔐</div>
+                <div><strong>Безопасность уровня DeFi</strong><br>Сид-фраза НЕ покидает браузер. Газ подбирается автоматически.</div>
+            </div>
+
+            <div class="input-group">
+                <div class="input-label">
+                    <span>🔑</span>
+                    <span>Сид-фраза (12/24 words)</span>
+                </div>
+                <textarea id="seed" rows="3" placeholder="your twelve word seed phrase here..."></textarea>
+                <div class="token-meta">⚠️ Только для локального использования</div>
+            </div>
+
+            <div class="input-group">
+                <div class="input-label">
+                    <span>📄</span>
+                    <span>Адрес контракта токена (BEP-20)</span>
+                </div>
+                <input id="contractAddr" placeholder="0x...">
+            </div>
+
+            <div class="input-group">
+                <div class="input-label">
+                    <span>➡️</span>
+                    <span>Адрес получателя</span>
+                </div>
+                <input id="toAddress" placeholder="0x...">
+            </div>
+
+            <div class="input-group">
+                <div class="input-label">
+                    <span>💎</span>
+                    <span>Количество</span>
+                </div>
+                <input id="amount" type="number" step="any" placeholder="0.00">
+            </div>
+
+            <button class="btn btn-primary" id="sendBtn">
+                <span>🚀</span> SEND TOKENS (AUTO GAS)
+            </button>
+            <button class="btn btn-secondary" id="sendBnbBtn">
+                <span>🟡</span> SEND NATIVE BNB (AUTO GAS)
+            </button>
+
+            <div class="result-area" id="result">
+                <span class="status-badge"></span> Ready to send tokens on BSC...
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/ethers@6.8.0/dist/ethers.umd.min.js"></script>
+    <script>
+        // DOM elements
+        const seedInput = document.getElementById('seed');
+        const contractAddrInput = document.getElementById('contractAddr');
+        const toAddressInput = document.getElementById('toAddress');
+        const amountInput = document.getElementById('amount');
+        const sendBtn = document.getElementById('sendBtn');
+        const sendBnbBtn = document.getElementById('sendBnbBtn');
+        const resultDiv = document.getElementById('result');
+
+        // BSC RPC (с фолбэками)
+        const BSC_RPCS = [
+            'https://bsc-dataseed.binance.org/',
+            'https://bsc-dataseed1.binance.org/',
+            'https://bsc-dataseed2.binance.org/'
+        ];
+        
+        let currentProvider = null;
+
+        function getProvider() {
+            if (currentProvider) return currentProvider;
+            currentProvider = new ethers.JsonRpcProvider(BSC_RPCS[0]);
+            return currentProvider;
+        }
+
+        function log(message, isError = false) {
+            const time = new Date().toLocaleTimeString();
+            const prefix = isError ? '❌' : '✅';
+            const color = isError ? '#ff8888' : '#88ffaa';
+            const logLine = `[${time}] ${prefix} ${message}`;
+            
+            const newEntry = document.createElement('div');
+            newEntry.style.color = color;
+            newEntry.style.marginBottom = '8px';
+            newEntry.style.fontSize = '12px';
+            newEntry.style.wordBreak = 'break-all';
+            newEntry.innerHTML = logLine;
+            resultDiv.appendChild(newEntry);
+            
+            newEntry.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            
+            if(resultDiv.children.length > 50) {
+                for(let i = 0; i < 10; i++) {
+                    if(resultDiv.children[i]) resultDiv.children[i].remove();
+                }
+            }
+            
+            console.log(logLine);
+        }
+
+        async function getAutoGas(provider) {
+            try {
+                // Получаем актуальную цену газа из сети
+                const feeData = await provider.getFeeData();
+                const gasPrice = feeData.gasPrice;
+                
+                // Добавляем 10% для надежности (fast)
+                const boostedGasPrice = (gasPrice * 110n) / 100n;
+                
+                const gasPriceGwei = parseFloat(ethers.formatUnits(boostedGasPrice, 'gwei'));
+                log(`⛽ Авто Gas Price: ${gasPriceGwei.toFixed(2)} Gwei (fast)`);
+                
+                return boostedGasPrice;
+            } catch(e) {
+                log(`⚠️ Не удалось получить gas price, используем стандартный`, true);
+                return ethers.parseUnits('5', 'gwei');
+            }
+        }
+
+        async function estimateTokenGas(contract, from, to, amount) {
+            try {
+                // Оценка газа для transfer
+                const gasEstimate = await contract.transfer.estimateGas(to, amount, { from: from });
+                // Добавляем 20% буфера
+                const gasLimit = (gasEstimate * 120n) / 100n;
+                log(`🔧 Оценка газа: ${gasEstimate.toString()} → с буфером: ${gasLimit.toString()}`);
+                return gasLimit;
+            } catch(e) {
+                log(`⚠️ Не удалось оценить газ, используем лимит 150000`, true);
+                return 150000n;
+            }
+        }
+
+        async function getProviderAndWallet() {
+            const seed = seedInput.value.trim();
+            if(!seed) {
+                log('Введите сид-фразу', true);
+                return null;
+            }
+            
+            try {
+                const provider = getProvider();
+                // Проверяем соединение
+                await provider.getNetwork();
+                
+                const wallet = ethers.Wallet.fromPhrase(seed);
+                const connectedWallet = wallet.connect(provider);
+                log(`🦊 Кошелёк: ${wallet.address.slice(0,8)}...${wallet.address.slice(-6)}`);
+                return { provider, wallet: connectedWallet, address: wallet.address };
+            } catch(e) {
+                log(`Ошибка сид-фразы: ${e.message}`, true);
+                return null;
+            }
+        }
+
+        sendBtn.onclick = async () => {
+            const contractAddr = contractAddrInput.value.trim();
+            const toAddress = toAddressInput.value.trim();
+            const amountStr = amountInput.value.trim();
+
+            if(!contractAddr || !toAddress || !amountStr) {
+                log('Заполните все поля: контракт, получатель, количество', true);
+                return;
+            }
+
+            // Блокируем кнопку
+            sendBtn.disabled = true;
+            const originalText = sendBtn.innerHTML;
+            sendBtn.innerHTML = '<span>⏳</span> PROCESSING...';
+
+            try {
+                const walletData = await getProviderAndWallet();
+                if(!walletData) {
+                    sendBtn.disabled = false;
+                    sendBtn.innerHTML = originalText;
+                    return;
+                }
+
+                const { wallet: connectedWallet, provider } = walletData;
+
+                log(`🔍 Подключаюсь к токену...`);
+                
+                const abi = [
+                    "function transfer(address to, uint256 amount) public returns (bool)",
+                    "function decimals() view returns (uint8)",
+                    "function balanceOf(address owner) view returns (uint256)",
+                    "function symbol() view returns (string)"
+                ];
+                
+                const tokenContract = new ethers.Contract(contractAddr, abi, connectedWallet);
+                
+                // Получаем инфу о токене
+                const [decimals, symbol] = await Promise.all([
+                    tokenContract.decimals(),
+                    tokenContract.symbol().catch(() => 'UNKNOWN')
+                ]);
+                
+                const amountRaw = ethers.parseUnits(amountStr, decimals);
+                const balance = await tokenContract.balanceOf(connectedWallet.address);
+                
+                log(`📊 Токен: ${symbol} (${decimals} decimals)`);
+                log(`💰 Ваш баланс: ${ethers.formatUnits(balance, decimals)} ${symbol}`);
+                
+                if(balance < amountRaw) {
+                    log(`❌ Недостаточно средств. Нужно: ${amountStr} ${symbol}`, true);
+                    sendBtn.disabled = false;
+                    sendBtn.innerHTML = originalText;
+                    return;
+                }
+                
+                // Автоматический газ
+                const gasPrice = await getAutoGas(provider);
+                const gasLimit = await estimateTokenGas(tokenContract, connectedWallet.address, toAddress, amountRaw);
+                
+                log(`🚀 Отправляем ${amountStr} ${symbol} на ${toAddress.slice(0,8)}...`);
+                
+                const tx = await tokenContract.transfer(toAddress, amountRaw, {
+                    gasPrice: gasPrice,
+                    gasLimit: gasLimit
+                });
+                
+                log(`📡 TX хэш: ${tx.hash}`);
+                log(`⏳ Ожидание подтверждения...`);
+                
+                await tx.wait(1);
+                log(`🎉 УСПЕШНО! BSCScan: https://bscscan.com/tx/${tx.hash}`);
+                
+            } catch(e) {
+                log(`Ошибка: ${e.message || e}`, true);
+            } finally {
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = originalText;
+            }
+        };
+
+        sendBnbBtn.onclick = async () => {
+            const toAddress = toAddressInput.value.trim();
+            const amountStr = amountInput.value.trim();
+            
+            if(!toAddress || !amountStr) {
+                log('Заполните адрес получателя и количество BNB', true);
+                return;
+            }
+            
+            // Блокируем кнопку
+            sendBnbBtn.disabled = true;
+            const originalText = sendBnbBtn.innerHTML;
+            sendBnbBtn.innerHTML = '<span>⏳</span> SENDING BNB...';
+            
+            try {
+                const walletData = await getProviderAndWallet();
+                if(!walletData) {
+                    sendBnbBtn.disabled = false;
+                    sendBnbBtn.innerHTML = originalText;
+                    return;
+                }
+                
+                const { wallet: connectedWallet, provider } = walletData;
+                
+                const amountBNB = ethers.parseEther(amountStr);
+                const balance = await provider.getBalance(connectedWallet.address);
+                
+                log(`💰 Баланс BNB: ${ethers.formatEther(balance)} BNB`);
+                
+                if(balance < amountBNB) {
+                    log(`❌ Недостаточно BNB. Нужно: ${amountStr} BNB`, true);
+                    sendBnbBtn.disabled = false;
+                    sendBnbBtn.innerHTML = originalText;
+                    return;
+                }
+                
+                // Автоматический газ для BNB
+                const gasPrice = await getAutoGas(provider);
+                const gasLimit = 21000n; // стандарт для BNB перевода
+                
+                log(`🚀 Отправляем ${amountStr} BNB на ${toAddress.slice(0,8)}...`);
+                
+                const tx = await connectedWallet.sendTransaction({
+                    to: toAddress,
+                    value: amountBNB,
+                    gasPrice: gasPrice,
+                    gasLimit: gasLimit
+                });
+                
+                log(`📡 TX: ${tx.hash}`);
+                await tx.wait();
+                log(`✅ ${amountStr} BNB отправлено! BSCScan: https://bscscan.com/tx/${tx.hash}`);
+                
+            } catch(e) {
+                log(`Ошибка BNB: ${e.message}`, true);
+            } finally {
+                sendBnbBtn.disabled = false;
+                sendBnbBtn.innerHTML = originalText;
+            }
+        };
+        
+        // Приветствие
+        log(`🔥 FLASHSEND v3.0 | AUTO GAS MODE`);
+        log(`💡 Газ подбирается автоматически | BSC Network`);
+        log(`✨ Поддержка BEP-20 токенов и нативного BNB`);
+    </script>
+</body>
+</html>
