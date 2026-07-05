@@ -35,6 +35,7 @@ from admin_account_flow import (
 )
 from blocked_chats import blocked_count, estimate_accounts
 from config import load_app_config
+from gh_log import format_recent
 from import_chats import import_from_text
 from proxy import parse_socks5_proxy
 from storage import (
@@ -76,6 +77,7 @@ def _menu_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="➕ Аккаунт", callback_data="add_account"),
             ],
             [
+                InlineKeyboardButton(text="📋 GH лог", callback_data="ghlog"),
                 InlineKeyboardButton(text="📖 Справка", callback_data="help"),
             ],
         ]
@@ -183,6 +185,8 @@ def _help_text() -> str:
         "<code>/source acc1 channel 13</code>\n"
         "<code>/toggle acc1</code>\n"
         "<code>/delay 120</code>\n\n"
+        "<b>Group Help</b>\n"
+        "<code>/ghlog</code> или 📋 GH лог — что нажимали в чатах\n\n"
         "<b>Аккаунты</b>\n"
         "<code>/addaccount</code> — добавить через код (римские цифры)\n"
         "Или отправьте <b>.session</b> файл:\n"
@@ -344,6 +348,13 @@ def create_dispatcher() -> Dispatcher:
             _back_keyboard(),
         )
 
+    @dp.message(Command("ghlog"))
+    async def cmd_ghlog(message: Message) -> None:
+        if not _is_admin(message.from_user.id):
+            return
+        body = html.escape(format_recent(20))
+        await _answer(message, f"📋 <b>Group Help лог</b>\n{SEP}\n<pre>{body}</pre>", _back_keyboard())
+
     @dp.message(Command("addaccount"))
     async def cmd_addaccount_handler(message: Message, state: FSMContext) -> None:
         if not _is_admin(message.from_user.id):
@@ -399,6 +410,15 @@ def create_dispatcher() -> Dispatcher:
             await query.answer("🚫", show_alert=True)
             return
         await on_auth_cancel(query, state)
+
+    @dp.callback_query(F.data == "ghlog")
+    async def cb_ghlog(query: CallbackQuery) -> None:
+        if not _is_admin(query.from_user.id):
+            await query.answer("🚫", show_alert=True)
+            return
+        body = html.escape(format_recent(20))
+        await _edit_or_send(query, f"📋 <b>Group Help лог</b>\n{SEP}\n<pre>{body}</pre>", _back_keyboard())
+        await query.answer()
 
     @dp.callback_query(F.data == "add_account")
     async def cb_add_account(query: CallbackQuery, state: FSMContext) -> None:

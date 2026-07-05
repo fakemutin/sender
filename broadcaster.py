@@ -82,7 +82,7 @@ async def send_to_chat(
     for attempt in range(1, MAX_SEND_ATTEMPTS + 1):
         try:
             await ensure_member(client, chat.chat_id, me)
-            await bypass_group_help(client, chat.chat_id)
+            await bypass_group_help(client, chat.chat_id, account=account_name)
 
             sent = await client.send_message(chat.chat_id, message)
             await asyncio.sleep(DELETE_CHECK_DELAY)
@@ -97,7 +97,22 @@ async def send_to_chat(
                 attempt,
                 MAX_SEND_ATTEMPTS,
             )
-            await bypass_group_help(client, chat.chat_id)
+            try:
+                from gh_log import log_event
+                from group_help import _chat_label
+
+                label = await _chat_label(client, chat.chat_id)
+                log_event(
+                    chat_id=chat.chat_id,
+                    chat_label=label,
+                    action="удалено",
+                    detail=f"повтор {attempt}/{MAX_SEND_ATTEMPTS}",
+                    account=account_name,
+                    ok=False,
+                )
+            except Exception:
+                pass
+            await bypass_group_help(client, chat.chat_id, account=account_name)
             await asyncio.sleep(2)
         except FloodWaitError as exc:
             wait_seconds = exc.seconds + 2
@@ -105,7 +120,7 @@ async def send_to_chat(
             await asyncio.sleep(wait_seconds)
         except UserNotParticipantError:
             await ensure_member(client, chat.chat_id, me)
-            await bypass_group_help(client, chat.chat_id)
+            await bypass_group_help(client, chat.chat_id, account=account_name)
         except RPCError as exc:
             if should_block_error(exc):
                 _handle_send_failure(chat, account_name, str(exc), exc)

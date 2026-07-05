@@ -54,8 +54,46 @@ def _is_group_help(entity) -> bool:
     return "group help" in first or "grouphelp" in first
 
 
-async def _click_verify_buttons(client: TelegramClient, chat_id: int) -> int:
+async def _chat_label(client: TelegramClient, chat_id: int) -> str:
+    try:
+        entity = await client.get_entity(chat_id)
+        username = getattr(entity, "username", None)
+        title = getattr(entity, "title", None) or getattr(entity, "first_name", None)
+        if username:
+            return f"@{username}"
+        if title:
+            return str(title)
+    except RPCError:
+        pass
+    return str(chat_id)
+
+
+def _log(account: str, chat_id: int, chat_label: str, action: str, detail: str, ok: bool = True) -> None:
+    logger.info("Group Help [%s] %s — %s: %s", account or "?", chat_label, action, detail)
+    try:
+        from gh_log import log_event
+
+        log_event(
+            chat_id=chat_id,
+            chat_label=chat_label,
+            action=action,
+            detail=detail,
+            account=account,
+            ok=ok,
+        )
+    except Exception:
+        pass
+
+
+async def _click_verify_buttons(
+    client: TelegramClient,
+    chat_id: int,
+    *,
+    account: str = "",
+    chat_label: str = "",
+) -> int:
     clicked = 0
+    label = chat_label or await _chat_label(client, chat_id)
     async for message in client.iter_messages(chat_id, limit=25):
         sender = await message.get_sender()
         if not _is_group_help(sender):
@@ -63,51 +101,59 @@ async def _click_verify_buttons(client: TelegramClient, chat_id: int) -> int:
         if not message.reply_markup:
             continue
         try:
+            button_text = None
             for row in message.reply_markup.rows:
                 for button in row.buttons:
-                    label = (getattr(button, "text", None) or "").lower()
-                    if any(marker in label for marker in VERIFY_BUTTON_MARKERS):
-                        await message.click(text=button.text)
-                        clicked += 1
-                        await asyncio.sleep(1)
+                    btn_label = (getattr(button, "text", None) or "").lower()
+                    if any(marker in btn_label for marker in VERIFY_BUTTON_MARKERS):
+                        button_text = button.text
                         break
-                if clicked:
+                if button_text:
                     break
-            if not clicked and message.reply_markup.rows:
-                first = message.reply_markup.rows[0].buttons[0]
-                await message.click(text=first.text)
+            if not button_text and message.reply_markup.rows:
+                button_text = message.reply_markup.rows[0].buttons[0].text
+
+            if button_text:
+                await message.click(text=button_text)
                 clicked += 1
+                _log(account, chat_id, label, "кнопка", button_text)
                 await asyncio.sleep(1)
         except Exception as exc:
+            _log(account, chat_id, label, "ошибка кнопки", str(exc), ok=False)
             logger.debug("Не удалось нажать кнопку Group Help: %s", exc)
     return clicked
 
 
-async def _start_group_help_pm(client: TelegramClient) -> bool:
+async def _start_group_help_pm(client: TelegramClient, chat_id: int, *, account: str = "", chat_label: str = "") -> bool:
+    label = chat_label or await _chat_label(client, chat_id)
     for username in ("GroupHelpBot", "grouphelpbot"):
         try:
             await client.send_message(username, "/start")
+            _log(account, chat_id, label, "PM /start", f"@{username}")
             await asyncio.sleep(1)
             return True
-        except RPCError:
+        except RPCError as exc:
+            _log(account, chat_id, label, "PM ошибка", str(exc), ok=False)
             continue
     return False
 
 
-async def bypass_group_help(client: TelegramClient, chat_id: int) -> bool:
-    clicked = await _click_verify_buttons(client, chat_id)
+async def bypass_group_help(client: TelegramClient, chat_id: int, *, account: str = "") -> bool:
+    chat_label = await _chat_label(client, chat_id)
+    clicked = await _click_verify_buttons(client, chat_id, account=account, chat_label=chat_label)
     if clicked:
-        logger.info("Group Help: нажато кнопок %s в чате %s", clicked, chat_id)
         await asyncio.sleep(2)
         return True
 
-    started = await _start_group_help_pm(client)
+    started = await _start_group_help_pm(client, chat_id, account=account, chat_label=chat_label)
     if started:
-        clicked = await _click_verify_buttons(client, chat_id)
+        clicked = await _click_verify_buttons(client, chat_id, account=account, chat_label=chat_label)
         if clicked:
-            logger.info("Group Help: повторно нажато %s кнопок", clicked)
             await asyncio.sleep(2)
             return True
+
+    if not clicked and not started:
+        _log(account, chat_id, chat_label, "ничего не найдено", "нет кнопок Group Help", ok=False)
     return clicked > 0 or started
 
 
