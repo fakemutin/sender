@@ -65,6 +65,17 @@ def _require_api_credentials() -> tuple[int, str]:
     return int(api_id), api_hash
 
 
+def _env_defaults() -> dict:
+    return {
+        "session_name": os.getenv("SESSION_NAME", "").strip(),
+        "source_chat": os.getenv("SOURCE_CHAT", "").strip(),
+        "source_message_id": _env_int("SOURCE_MESSAGE_ID", 0),
+        "delay_between_chats": _env_int("DELAY_BETWEEN_CHATS", 120),
+        "require_admin": _env_bool("REQUIRE_ADMIN", True),
+        "allowed_chats": os.getenv("ALLOWED_CHATS", ""),
+    }
+
+
 def _build_account(name: str, data: dict, defaults: dict, api_id: int, api_hash: str) -> AccountSettings:
     merged = {**defaults, **data}
     session_name = str(merged.get("session_name", "")).strip()
@@ -100,7 +111,7 @@ def _load_from_accounts_file(path: Path, api_id: int, api_hash: str) -> AppConfi
     with path.open(encoding="utf-8") as handle:
         payload = json.load(handle)
 
-    defaults = payload.get("defaults", {})
+    defaults = {**_env_defaults(), **payload.get("defaults", {})}
     accounts_raw = payload.get("accounts")
     if not accounts_raw:
         raise RuntimeError(f"В {path} нет секции accounts")
@@ -121,44 +132,27 @@ def _load_from_accounts_file(path: Path, api_id: int, api_hash: str) -> AppConfi
     )
 
 
-def _load_legacy_single_account(api_id: int, api_hash: str) -> AppConfig:
-    session_name = os.getenv("SESSION_NAME", "").strip()
-    if not session_name:
-        raise RuntimeError(
-            "Создайте accounts.json (см. accounts.example.json) "
-            "или заполните SESSION_NAME в .env для одного аккаунта"
-        )
-
-    account = _build_account(
-        "default",
-        {
-            "session_name": session_name,
-            "source_chat": os.getenv("SOURCE_CHAT", "").strip(),
-            "source_message_id": _env_int("SOURCE_MESSAGE_ID", 0),
-            "delay_between_chats": _env_int("DELAY_BETWEEN_CHATS", 120),
-            "require_admin": _env_bool("REQUIRE_ADMIN", True),
-            "allowed_chats": os.getenv("ALLOWED_CHATS", ""),
-        },
-        {},
-        api_id,
-        api_hash,
-    )
-
-    return AppConfig(
-        accounts=(account,),
-        delay_between_accounts=_env_int("DELAY_BETWEEN_ACCOUNTS", 300),
-        break_after_cycle=_env_int("BREAK_AFTER_CYCLE", 10800),
-    )
-
-
 def load_app_config() -> AppConfig:
     api_id, api_hash = _require_api_credentials()
-    accounts_file = Path(os.getenv("ACCOUNTS_FILE", "accounts.json"))
+    env_defaults = _env_defaults()
 
+    # Старый режим: все переменные в .env (приоритет)
+    if env_defaults["session_name"]:
+        account = _build_account("default", env_defaults, {}, api_id, api_hash)
+        return AppConfig(
+            accounts=(account,),
+            delay_between_accounts=_env_int("DELAY_BETWEEN_ACCOUNTS", 300),
+            break_after_cycle=_env_int("BREAK_AFTER_CYCLE", 10800),
+        )
+
+    accounts_file = Path(os.getenv("ACCOUNTS_FILE", "accounts.json"))
     if accounts_file.exists():
         return _load_from_accounts_file(accounts_file, api_id, api_hash)
 
-    return _load_legacy_single_account(api_id, api_hash)
+    raise RuntimeError(
+        "Заполните SESSION_NAME в .env (один аккаунт) "
+        "или создайте accounts.json (см. accounts.example.json)"
+    )
 
 
 def filter_accounts(config: AppConfig, names: set[str] | None) -> tuple[AccountSettings, ...]:

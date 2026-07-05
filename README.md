@@ -18,11 +18,12 @@
 ```bash
 pip install -r requirements.txt
 cp .env.example .env
-cp accounts.example.json accounts.json
-# заполните .env и accounts.json
+# заполните .env (SESSION_NAME, SOURCE_CHAT, SOURCE_MESSAGE_ID, ...)
 ```
 
-## Первый вход (для каждого аккаунта)
+Для **2+ аккаунтов** дополнительно: `cp accounts.example.json accounts.json` и оставьте `SESSION_NAME` пустым.
+
+## Первый вход
 
 ```bash
 python -c "
@@ -30,13 +31,13 @@ from telethon.sync import TelegramClient
 import os
 from dotenv import load_dotenv
 load_dotenv()
-client = TelegramClient('+79001111111', int(os.environ['API_ID']), os.environ['API_HASH'])
+client = TelegramClient(os.environ['SESSION_NAME'], int(os.environ['API_ID']), os.environ['API_HASH'])
 client.start()
 client.disconnect()
 "
 ```
 
-Повторите для каждого `session_name` из `accounts.json`.
+Для `accounts.json` — повторите для каждого `session_name`.
 
 ## Запуск
 
@@ -61,34 +62,23 @@ python main.py
 0 */3 * * * cd /path/to/tg-broadcast && /usr/bin/python3 main.py --once >> broadcast.log 2>&1
 ```
 
-## accounts.json
+## Конфиг (.env) — основной способ
 
-```json
-{
-  "delay_between_accounts": 300,
-  "break_after_cycle": 10800,
-  "defaults": {
-    "delay_between_chats": 120,
-    "require_admin": true
-  },
-  "accounts": [
-    {
-      "name": "acc1",
-      "session_name": "+79001111111",
-      "source_chat": "channel",
-      "source_message_id": 13,
-      "enabled": true
-    },
-    {
-      "name": "acc2",
-      "session_name": "+79002222222",
-      "source_chat": "channel",
-      "source_message_id": 13,
-      "enabled": true
-    }
-  ]
-}
-```
+| Переменная | Описание |
+|---|---|
+| `API_ID`, `API_HASH` | [my.telegram.org](https://my.telegram.org) |
+| `SESSION_NAME` | Имя файла сессии (номер телефона) |
+| `SOURCE_CHAT` | Канал-источник (@username) |
+| `SOURCE_MESSAGE_ID` | ID поста для рассылки |
+| `DELAY_BETWEEN_CHATS` | Пауза между чатами (сек) |
+| `BREAK_AFTER_CYCLE` | Пауза между циклами (сек) |
+| `REQUIRE_ADMIN` | `true` = только чаты где вы админ |
+| `ALLOWED_CHATS` | Опциональный белый список |
+
+## accounts.json — для 2+ аккаунтов
+
+Если `SESSION_NAME` в `.env` **пустой**, используется `accounts.json`.
+Значения из `.env` подставляются как defaults для всех аккаунтов.
 
 ## Безопасность
 
