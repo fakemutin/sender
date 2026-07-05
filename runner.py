@@ -7,6 +7,7 @@ from pathlib import Path
 from telethon import TelegramClient
 
 from broadcaster import CycleStats, list_allowed_chats, run_broadcast_cycle
+from chat_checker import filter_account_chats
 from config import AccountSettings, AppConfig
 
 logger = logging.getLogger(__name__)
@@ -103,6 +104,24 @@ async def run_account_list(account: AccountSettings) -> int:
         if client is None:
             return 0
         return await list_allowed_chats(client, account)
+
+
+async def run_account_filter(account: AccountSettings) -> dict:
+    async with account_session(account) as client:
+        if client is None:
+            return {"ok": 0, "bad": 0, "blocked_before": 0}
+        return await filter_account_chats(client, account)
+
+
+async def run_all_accounts_filter(config: AppConfig, accounts: tuple[AccountSettings, ...]) -> None:
+    if config.parallel_accounts:
+        results = await _run_accounts_parallel(accounts, run_account_filter)
+    else:
+        results = await _run_accounts_sequential(config, accounts, run_account_filter)
+
+    total_ok = sum(r.get("ok", 0) for r in results)
+    total_bad = sum(r.get("bad", 0) for r in results)
+    logger.info("Фильтр итого: рабочих %s, мёртвых %s", total_ok, total_bad)
 
 
 async def run_account_once(account: AccountSettings) -> CycleStats:

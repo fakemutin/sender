@@ -7,7 +7,7 @@ import sys
 from dataclasses import replace
 
 from config import filter_accounts, load_app_config
-from runner import run_all_accounts_list, run_loop
+from runner import run_all_accounts_filter, run_all_accounts_list, run_loop
 
 logging.getLogger("telethon").setLevel(logging.CRITICAL)
 
@@ -45,11 +45,34 @@ def main() -> None:
         help="Запускать аккаунты по очереди, а не параллельно",
     )
     parser.add_argument(
+        "--filter-chats",
+        action="store_true",
+        help="Проверить чаты и заблокировать нерабочие (без рассылки)",
+    )
+    parser.add_argument(
+        "--calc",
+        type=int,
+        metavar="N",
+        help="Сколько аккаунтов нужно для N чатов",
+    )
+    parser.add_argument(
         "--bot",
         action="store_true",
-        help="Запустить Telegram-бота для настройки и управления",
+        help="Запустить admin-бота (aiogram)",
     )
     args = parser.parse_args()
+
+    if args.calc is not None:
+        from blocked_chats import estimate_accounts
+
+        info = estimate_accounts(args.calc)
+        print(
+            f"Чатов: {info['total']}\n"
+            f"Аккаунтов нужно: {info['accounts']}\n"
+            f"Лимит на аккаунт: {info['per_account']}\n"
+            f"С прокси: {info['with_proxy']}, без прокси: {info['without_proxy']}"
+        )
+        return
 
     if args.bot:
         from admin_bot import run_admin_bot
@@ -75,6 +98,8 @@ def main() -> None:
 
     if args.list:
         asyncio.run(run_all_accounts_list(config, accounts))
+    elif args.filter_chats:
+        asyncio.run(run_all_accounts_filter(config, accounts))
     else:
         asyncio.run(run_loop(config, accounts, once=args.once))
 

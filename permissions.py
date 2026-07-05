@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from telethon import TelegramClient
 from telethon.tl.types import Channel, User
 
+from blocked_chats import is_blocked
 from config import AccountSettings
 
 
@@ -99,5 +100,8 @@ async def iter_allowed_chats(
             require_admin=settings.require_admin,
             allowed_chats=settings.allowed_chats,
         )
-        if info.allowed:
-            yield info
+        if not info.allowed:
+            continue
+        if is_blocked(info.chat_id, info.username, settings.name):
+            continue
+        yield info

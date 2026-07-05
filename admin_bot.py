@@ -17,6 +17,7 @@ from aiogram.types import (
     Message,
 )
 
+from blocked_chats import blocked_count, estimate_accounts
 from config import load_app_config
 from proxy import parse_socks5_proxy
 from storage import (
@@ -50,6 +51,10 @@ def _menu_keyboard() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(text="👤 Аккаунты", callback_data="accounts"),
+                InlineKeyboardButton(text="🧹 Фильтр", callback_data="filter"),
+            ],
+            [
+                InlineKeyboardButton(text="🧮 Аккаунты?", callback_data="calc"),
                 InlineKeyboardButton(text="📖 Справка", callback_data="help"),
             ],
         ]
@@ -92,6 +97,7 @@ def _format_status() -> str:
             f"👤 Аккаунтов: <b>{len(config.accounts)}</b>",
             f"🔐 Сессии: <b>{sessions_ok}/{len(config.accounts)}</b>",
             f"⚙️ Режим: {mode}",
+            f"🚫 В блоке: <b>{blocked_count()}</b> чатов",
             "",
         ]
 
@@ -154,6 +160,10 @@ def _help_text() -> str:
         "<code>/source acc1 channel 13</code>\n"
         "<code>/toggle acc1</code>\n"
         "<code>/delay 120</code>\n\n"
+        "<b>Фильтр</b>\n"
+        "🧹 или <code>/filter</code> — проверить чаты, мёртвые в блок\n"
+        "<b>Калькулятор</b>\n"
+        "<code>/calc 3000</code> — сколько аккаунтов нужно\n\n"
         "<b>Файл .txt</b>\n"
         "Отправьте список чатов.\n"
         "Подпись: <code>acc1</code> или пусто."
@@ -183,11 +193,11 @@ def _format_run_result(code: int, output: str) -> str:
     )
 
 
-async def _run_broadcast() -> tuple[int, str]:
+async def _run_subcommand(*args: str) -> tuple[int, str]:
     proc = await asyncio.create_subprocess_exec(
         sys.executable,
         str(MAIN_SCRIPT),
-        "--once",
+        *args,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
         cwd=str(MAIN_SCRIPT.parent),
@@ -195,6 +205,14 @@ async def _run_broadcast() -> tuple[int, str]:
     )
     stdout, _ = await proc.communicate()
     return proc.returncode or 0, stdout.decode("utf-8", errors="replace")
+
+
+async def _run_broadcast() -> tuple[int, str]:
+    return await _run_subcommand("--once")
+
+
+async def _run_filter() -> tuple[int, str]:
+    return await _run_subcommand("--filter-chats")
 
 
 async def _answer(message: Message, text: str, keyboard: InlineKeyboardMarkup | None = None) -> None:
@@ -238,6 +256,53 @@ def create_dispatcher() -> Dispatcher:
         if not _is_admin(message.from_user.id):
             return
         await _answer(message, _format_accounts(), _back_keyboard())
+
+    @dp.message(Command("filter"))
+    async def cmd_filter(message: Message) -> None:
+        if not _is_admin(message.from_user.id):
+            return
+        wait = await message.answer("🧹 <b>Фильтрую чаты...</b>\n<i>Мёртвые попадут в блок-лист</i>")
+        code, output = await _run_filter()
+        save_state({
+            **load_state(),
+            "last_filter": "ok" if code == 0 else f"error ({code})",
+            "last_filter_output": output,
+            "last_filter_at": datetime.now().isoformat(timespec="seconds"),
+        })
+        await wait.edit_text(_format_run_result(code, output), reply_markup=_back_keyboard())
+
+    @dp.message(Command("calc"))
+    async def cmd_calc(message: Message) -> None:
+        if not _is_admin(message.from_user.id):
+            return
+        parts = (message.text or "").split(maxsplit=1)
+        if len(parts) < 2:
+            await _answer(
+                message,
+                "❌ Формат: <code>/calc 3000</code>\n\n"
+                "<i>750 чатов на аккаунт (Premium лимит ~1000, с запасом)</i>",
+                _back_keyboard(),
+            )
+            return
+        try:
+            total = int(parts[1])
+        except ValueError:
+            await _answer(message, "❌ Укажите число чатов", _back_keyboard())
+            return
+        info = estimate_accounts(total)
+        await _answer(
+            message,
+            (
+                "🧮 <b>Калькулятор аккаунтов</b>\n"
+                f"{SEP}\n"
+                f"📁 Чатов: <b>{info['total']}</b>\n"
+                f"👤 Нужно аккаунтов: <b>{info['accounts']}</b>\n"
+                f"📊 Лимит на аккаунт: <b>{info['per_account']}</b>\n"
+                f"🧦 С прокси: <b>{info['with_proxy']}</b>\n"
+                f"🌐 Без прокси: <b>{info['without_proxy']}</b>"
+            ),
+            _back_keyboard(),
+        )
 
     @dp.message(Command("run"))
     async def cmd_run(message: Message) -> None:
@@ -356,6 +421,45 @@ def create_dispatcher() -> Dispatcher:
             await query.answer("🚫", show_alert=True)
             return
         await _edit_or_send(query, _help_text(), _back_keyboard())
+        await query.answer()
+
+    @dp.callback_query(F.data == "filter")
+    async def cb_filter(query: CallbackQuery) -> None:
+        if not _is_admin(query.from_user.id):
+            await query.answer("🚫", show_alert=True)
+            return
+        await _edit_or_send(query, "🧹 <b>Фильтрую чаты...</b>\n<i>Подождите</i>", None)
+        await query.answer()
+        code, output = await _run_filter()
+        save_state({
+            **load_state(),
+            "last_filter": "ok" if code == 0 else f"error ({code})",
+            "last_filter_output": output,
+            "last_filter_at": datetime.now().isoformat(timespec="seconds"),
+        })
+        await _edit_or_send(query, _format_run_result(code, output), _back_keyboard())
+
+    @dp.callback_query(F.data == "calc")
+    async def cb_calc(query: CallbackQuery) -> None:
+        if not _is_admin(query.from_user.id):
+            await query.answer("🚫", show_alert=True)
+            return
+        await _edit_or_send(
+            query,
+            (
+                "🧮 <b>Калькулятор</b>\n"
+                f"{SEP}\n"
+                "Отправьте команду:\n"
+                "<code>/calc 3000</code>\n\n"
+                "<b>Ориентиры для вашей базы</b>\n"
+                "• 3 000 чатов → <b>4</b> аккаунта\n"
+                "• 7 500 чатов → <b>10</b> аккаунтов\n"
+                "• 15 000 чатов → <b>20</b> аккаунтов\n"
+                "• 30 000 чатов → <b>40</b> аккаунтов\n\n"
+                "<i>750 рабочих чатов на аккаунт (Premium ~1000, с запасом)</i>"
+            ),
+            _back_keyboard(),
+        )
         await query.answer()
 
     @dp.callback_query(F.data == "run")
