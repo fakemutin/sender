@@ -10,8 +10,6 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.filters import Command
-from aiogram.fsm.context import FSMContext
-from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
@@ -21,18 +19,13 @@ from aiogram.types import (
 
 from account_auth import auth_manager
 from admin_account_flow import (
-    AddAccount,
-    cmd_addaccount,
-    on_add_api_hash,
-    on_add_api_id,
-    on_add_name,
-    on_add_password,
-    on_add_phone,
-    on_add_proxy,
+    handle_flow_text,
     on_auth_cancel,
     on_auth_digit,
     on_session_file,
+    start_add_account,
 )
+from flow_state import clear_flow, get_flow
 from blocked_chats import blocked_count, estimate_accounts
 from config import load_app_config
 from gh_log import format_recent
@@ -271,7 +264,7 @@ async def _edit_or_send(query: CallbackQuery, text: str, keyboard: InlineKeyboar
 
 
 def create_dispatcher() -> Dispatcher:
-    dp = Dispatcher(storage=MemoryStorage())
+    dp = Dispatcher()
 
     async def deny(message: Message) -> None:
         await message.answer("🚫 Нет доступа.")
@@ -355,61 +348,30 @@ def create_dispatcher() -> Dispatcher:
         body = html.escape(format_recent(20))
         await _answer(message, f"📋 <b>Group Help лог</b>\n{SEP}\n<pre>{body}</pre>", _back_keyboard())
 
-    @dp.message(Command("addaccount"))
-    async def cmd_addaccount_handler(message: Message, state: FSMContext) -> None:
+    @dp.message(Command("addaccount", "cancel"))
+    async def cmd_addaccount_handler(message: Message) -> None:
         if not _is_admin(message.from_user.id):
             return
-        await cmd_addaccount(message, state)
-
-    @dp.message(AddAccount.name)
-    async def fsm_add_name(message: Message, state: FSMContext) -> None:
-        if not _is_admin(message.from_user.id):
+        if (message.text or "").startswith("/cancel"):
+            clear_flow(message.from_user.id)
+            await auth_manager.cancel(message.from_user.id)
+            await _answer(message, "❌ Добавление аккаунта отменено", _back_keyboard())
             return
-        await on_add_name(message, state)
-
-    @dp.message(AddAccount.phone)
-    async def fsm_add_phone(message: Message, state: FSMContext) -> None:
-        if not _is_admin(message.from_user.id):
-            return
-        await on_add_phone(message, state)
-
-    @dp.message(AddAccount.api_id)
-    async def fsm_add_api_id(message: Message, state: FSMContext) -> None:
-        if not _is_admin(message.from_user.id):
-            return
-        await on_add_api_id(message, state)
-
-    @dp.message(AddAccount.api_hash)
-    async def fsm_add_api_hash(message: Message, state: FSMContext) -> None:
-        if not _is_admin(message.from_user.id):
-            return
-        await on_add_api_hash(message, state)
-
-    @dp.message(AddAccount.proxy)
-    async def fsm_add_proxy(message: Message, state: FSMContext) -> None:
-        if not _is_admin(message.from_user.id):
-            return
-        await on_add_proxy(message, state)
-
-    @dp.message(AddAccount.password)
-    async def fsm_add_password(message: Message, state: FSMContext) -> None:
-        if not _is_admin(message.from_user.id):
-            return
-        await on_add_password(message, state)
+        await start_add_account(message, message.from_user.id)
 
     @dp.callback_query(F.data.startswith("auth_digit:"))
-    async def cb_auth_digit(query: CallbackQuery, state: FSMContext) -> None:
+    async def cb_auth_digit(query: CallbackQuery) -> None:
         if not _is_admin(query.from_user.id):
             await query.answer("🚫", show_alert=True)
             return
-        await on_auth_digit(query, state)
+        await on_auth_digit(query, query.from_user.id)
 
     @dp.callback_query(F.data == "auth_cancel")
-    async def cb_auth_cancel(query: CallbackQuery, state: FSMContext) -> None:
+    async def cb_auth_cancel(query: CallbackQuery) -> None:
         if not _is_admin(query.from_user.id):
             await query.answer("🚫", show_alert=True)
             return
-        await on_auth_cancel(query, state)
+        await on_auth_cancel(query, query.from_user.id)
 
     @dp.callback_query(F.data == "ghlog")
     async def cb_ghlog(query: CallbackQuery) -> None:
@@ -421,12 +383,12 @@ def create_dispatcher() -> Dispatcher:
         await query.answer()
 
     @dp.callback_query(F.data == "add_account")
-    async def cb_add_account(query: CallbackQuery, state: FSMContext) -> None:
+    async def cb_add_account(query: CallbackQuery) -> None:
         if not _is_admin(query.from_user.id):
             await query.answer("🚫", show_alert=True)
             return
         await query.answer()
-        await cmd_addaccount(query.message, state)
+        await start_add_account(query.message, query.from_user.id)
 
     @dp.message(Command("run"))
     async def cmd_run(message: Message) -> None:
@@ -603,10 +565,10 @@ def create_dispatcher() -> Dispatcher:
         await _edit_or_send(query, _format_run_result(code, output), _back_keyboard())
 
     @dp.message(F.document)
-    async def on_document(message: Message, bot: Bot, state: FSMContext) -> None:
+    async def on_document(message: Message, bot: Bot) -> None:
         if not _is_admin(message.from_user.id):
             return
-        if await on_session_file(message, bot, state):
+        if await on_session_file(message, bot, message.from_user.id):
             return
         if not message.document.file_name.lower().endswith(".txt"):
             await _answer(message, "❌ Нужен файл <b>.txt</b> или <b>.session</b>", _back_keyboard())
@@ -620,14 +582,15 @@ def create_dispatcher() -> Dispatcher:
         await _answer(message, _format_import_result(info), _back_keyboard())
 
     @dp.message(F.text)
-    async def on_text(message: Message, state: FSMContext) -> None:
+    async def on_text(message: Message) -> None:
         if not _is_admin(message.from_user.id):
             return
         text = message.text or ""
         if text.startswith("/"):
             return
-        current = await state.get_state()
-        if current:
+        if await handle_flow_text(message, message.from_user.id):
+            return
+        if get_flow(message.from_user.id):
             return
         parsed = parse_chat_text(text)
         if not parsed["chats"] and not parsed["addlists"]:
