@@ -96,7 +96,30 @@ python main.py
 }
 ```
 
-Или строкой: `"proxy": "socks5://user:pass@1.2.3.4:1080"`
+Или строкой: `"proxy": "socks5://user:pass@1.2.3.4:1080"` (рекомендуется)
+
+## Telegram-бот для настройки
+
+```env
+BOT_TOKEN=123456:ABC...
+ADMIN_IDS=123456789
+```
+
+```bash
+python main.py --bot
+```
+
+**Что умеет бот:**
+- `/start` — меню с кнопками
+- `/run` — запуск рассылки
+- `/status`, `/accounts` — статус аккаунтов и прокси
+- `/proxy acc1 socks5://user:pass@1.2.3.4:1080` — прокси строкой
+- `/source channel 13` или `/source acc1 channel 13`
+- `/toggle acc1` — вкл/выкл аккаунт
+- `/delay 120` — пауза между чатами
+- Отправить **.txt файл** — парсит чаты, подпись `acc1` или пусто для defaults
+
+Бот редактирует `accounts.json` на сервере.
 
 ## Безопасность
 
