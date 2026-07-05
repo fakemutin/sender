@@ -5,6 +5,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from proxy import Socks5Proxy, parse_socks5_proxy, validate_proxy_required
+
 load_dotenv()
 
 
@@ -47,6 +49,7 @@ class AccountSettings:
     delay_between_chats: int
     require_admin: bool
     allowed_chats: frozenset[str]
+    proxy: Socks5Proxy | None = None
     enabled: bool = True
 
 
@@ -74,6 +77,7 @@ def _env_defaults() -> dict:
         "delay_between_chats": _env_int("DELAY_BETWEEN_CHATS", 120),
         "require_admin": _env_bool("REQUIRE_ADMIN", True),
         "allowed_chats": os.getenv("ALLOWED_CHATS", ""),
+        "proxy": os.getenv("SOCKS5_PROXY", "").strip() or None,
     }
 
 
@@ -90,6 +94,7 @@ def _build_account(name: str, data: dict, defaults: dict, api_id: int, api_hash:
 
     account_api_id = merged.get("api_id", api_id)
     account_api_hash = merged.get("api_hash", api_hash)
+    proxy = parse_socks5_proxy(merged.get("proxy"), account_name=name)
 
     return AccountSettings(
         name=name,
@@ -101,6 +106,7 @@ def _build_account(name: str, data: dict, defaults: dict, api_id: int, api_hash:
         delay_between_chats=int(merged.get("delay_between_chats", 120)),
         require_admin=bool(merged.get("require_admin", True)),
         allowed_chats=_parse_allowed_chats(merged.get("allowed_chats")),
+        proxy=proxy,
         enabled=bool(merged.get("enabled", True)),
     )
 
@@ -121,6 +127,8 @@ def _load_from_accounts_file(path: Path, api_id: int, api_hash: str) -> AppConfi
     for index, item in enumerate(accounts_raw, start=1):
         name = str(item.get("name") or f"account{index}").strip()
         accounts.append(_build_account(name, item, defaults, api_id, api_hash))
+
+    validate_proxy_required(tuple(accounts))
 
     return AppConfig(
         accounts=tuple(accounts),
@@ -166,10 +174,13 @@ def filter_accounts(config: AppConfig, names: set[str] | None) -> tuple[AccountS
         raise RuntimeError("Нет включённых аккаунтов (enabled: true)")
 
     if not names:
+        validate_proxy_required(active)
         return active
 
     selected = tuple(account for account in active if account.name in names)
     missing = names - {account.name for account in selected}
     if missing:
         raise RuntimeError(f"Неизвестные аккаунты: {', '.join(sorted(missing))}")
+
+    validate_proxy_required(selected)
     return selected
