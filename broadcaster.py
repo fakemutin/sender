@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from dataclasses import dataclass
 from typing import Any
 
 from telethon import TelegramClient
@@ -10,26 +11,30 @@ from telethon.errors import (
     UserBannedInChannelError,
 )
 
-from config import Settings
-from permissions import ChatPermissionInfo, collect_allowed_chats
+from config import AccountSettings
+from permissions import ChatPermissionInfo, iter_allowed_chats
 
 logger = logging.getLogger(__name__)
 
 
-async def fetch_source_message(client: TelegramClient, settings: Settings) -> Any | None:
-    if not settings.source_chat or not settings.source_message_id:
-        logger.error("Укажите SOURCE_CHAT и SOURCE_MESSAGE_ID в .env")
-        return None
+@dataclass
+class CycleStats:
+    sent: int = 0
+    failed: int = 0
+    skipped: int = 0
 
+
+async def fetch_source_message(client: TelegramClient, settings: AccountSettings) -> Any | None:
     try:
         message = await client.get_messages(settings.source_chat, ids=settings.source_message_id)
     except RPCError as exc:
-        logger.error("Не удалось получить исходное сообщение: %s", exc)
+        logger.error("[%s] Не удалось получить сообщение: %s", settings.name, exc)
         return None
 
     if not message:
         logger.error(
-            "Сообщение %s не найдено в %s",
+            "[%s] Сообщение %s не найдено в %s",
+            settings.name,
             settings.source_message_id,
             settings.source_chat,
         )
@@ -44,7 +49,7 @@ async def send_to_chat(client: TelegramClient, chat_id: int, message: Any) -> tu
         return True, "отправлено"
     except FloodWaitError as exc:
         wait_seconds = exc.seconds + 2
-        logger.warning("FloodWait %ss для чата %s, ждём...", exc.seconds, chat_id)
+        logger.warning("FloodWait %ss для чата %s", exc.seconds, chat_id)
         await asyncio.sleep(wait_seconds)
         try:
             await client.send_message(chat_id, message)
@@ -57,47 +62,50 @@ async def send_to_chat(client: TelegramClient, chat_id: int, message: Any) -> tu
         return False, str(exc)
 
 
-async def run_broadcast_cycle(client: TelegramClient, settings: Settings) -> None:
+async def run_broadcast_cycle(client: TelegramClient, settings: AccountSettings) -> CycleStats:
+    stats = CycleStats()
     source_message = await fetch_source_message(client, settings)
     if not source_message:
-        return
+        return stats
 
-    allowed_chats = await collect_allowed_chats(
-        client,
-        require_admin=settings.require_admin,
-        allowed_chats=settings.allowed_chats,
-    )
-
-    if not allowed_chats:
-        logger.warning("Нет чатов, куда разрешена отправка")
-        return
-
-    logger.info("Найдено %s разрешённых чатов", len(allowed_chats))
-
-    for index, chat in enumerate(allowed_chats):
+    sent_any = False
+    async for chat in iter_allowed_chats(client, settings):
         success, detail = await send_to_chat(client, chat.chat_id, source_message)
         label = chat.username or chat.title
+
         if success:
-            logger.info("✓ [%s] %s — %s", chat.chat_id, label, detail)
+            stats.sent += 1
+            logger.info("[%s] ✓ %s — %s", settings.name, label, detail)
         else:
-            logger.warning("✗ [%s] %s — %s", chat.chat_id, label, detail)
+            stats.failed += 1
+            logger.warning("[%s] ✗ %s — %s", settings.name, label, detail)
 
-        if index < len(allowed_chats) - 1:
+        if sent_any:
             await asyncio.sleep(settings.delay_between_chats)
+        sent_any = True
 
+    if not sent_any:
+        logger.warning("[%s] Нет чатов, куда разрешена отправка", settings.name)
 
-async def list_allowed_chats(client: TelegramClient, settings: Settings) -> None:
-    chats = await collect_allowed_chats(
-        client,
-        require_admin=settings.require_admin,
-        allowed_chats=settings.allowed_chats,
+    logger.info(
+        "[%s] Цикл: отправлено %s, ошибок %s",
+        settings.name,
+        stats.sent,
+        stats.failed,
     )
+    return stats
 
-    if not chats:
-        print("Разрешённых чатов не найдено.")
-        return
 
-    print(f"Разрешённых чатов: {len(chats)}\n")
-    for chat in chats:
+async def list_allowed_chats(client: TelegramClient, settings: AccountSettings) -> int:
+    count = 0
+    print(f"\n=== {settings.name} ({settings.session_name}) ===")
+
+    async for chat in iter_allowed_chats(client, settings):
+        count += 1
         username = f"@{chat.username}" if chat.username else "—"
         print(f"  {chat.chat_id:>14}  {username:<24}  {chat.title}  ({chat.reason})")
+
+    if count == 0:
+        print("  Разрешённых чатов не найдено.")
+
+    return count
