@@ -44,7 +44,18 @@ def main() -> None:
         action="store_true",
         help="Запускать аккаунты по очереди, а не параллельно",
     )
+    parser.add_argument(
+        "--bot",
+        action="store_true",
+        help="Запустить Telegram-бота для настройки и управления",
+    )
     args = parser.parse_args()
+
+    if args.bot:
+        from admin_bot import run_admin_bot
+
+        asyncio.run(run_admin_bot())
+        return
 
     try:
         config = load_app_config()

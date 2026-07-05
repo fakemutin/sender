@@ -13,12 +13,7 @@
       "session_name": "+79001111111",
       "source_chat": "your_channel",
       "source_message_id": 13,
-      "proxy": {
-        "host": "127.0.0.1",
-        "port": 1080,
-        "username": "user1",
-        "password": "pass1"
-      },
+      "proxy": "socks5://user1:pass1@1.2.3.4:1080",
       "enabled": true
     },
     {
@@ -26,7 +21,7 @@
       "session_name": "+79002222222",
       "source_chat": "your_channel",
       "source_message_id": 13,
-      "proxy": "socks5://user2:pass2@127.0.0.2:1080",
+      "proxy": "socks5://user2:pass2@5.6.7.8:1080",
       "delay_between_chats": 180,
       "enabled": true
     }
