@@ -5,8 +5,8 @@
 ## Особенности
 
 - **Несколько аккаунтов** через `accounts.json`
+- **Параллельный запуск** всех аккаунтов одновременно (`PARALLEL_ACCOUNTS=true`)
 - **Минимальная нагрузка на сервер**:
-  - аккаунты работают **по очереди**, не параллельно
   - подключение → рассылка → отключение для каждого аккаунта
   - чаты обрабатываются **потоково**, без загрузки всего списка в память
   - `--once` + cron вместо вечного процесса
@@ -51,6 +51,9 @@ python main.py --once
 # Только один аккаунт
 python main.py --once --account acc1
 
+# По очереди (старый режим)
+python main.py --once --sequential
+
 # Бесконечный цикл (если нужен daemon)
 python main.py
 ```
@@ -62,34 +65,23 @@ python main.py
 0 */3 * * * cd /path/to/tg-broadcast && /usr/bin/python3 main.py --once >> broadcast.log 2>&1
 ```
 
-## accounts.json
+## Конфиг (.env) — основной способ
 
-```json
-{
-  "delay_between_accounts": 300,
-  "break_after_cycle": 10800,
-  "defaults": {
-    "delay_between_chats": 120,
-    "require_admin": true
-  },
-  "accounts": [
-    {
-      "name": "acc1",
-      "session_name": "+79001111111",
-      "source_chat": "channel",
-      "source_message_id": 13,
-      "enabled": true
-    },
-    {
-      "name": "acc2",
-      "session_name": "+79002222222",
-      "source_chat": "channel",
-      "source_message_id": 13,
-      "enabled": true
-    }
-  ]
-}
-```
+| Переменная | Описание |
+|---|---|
+| `API_ID`, `API_HASH` | [my.telegram.org](https://my.telegram.org) |
+| `SESSION_NAME` | Имя файла сессии (номер телефона) |
+| `SOURCE_CHAT` | Канал-источник (@username) |
+| `SOURCE_MESSAGE_ID` | ID поста для рассылки |
+| `DELAY_BETWEEN_CHATS` | Пауза между чатами (сек) |
+| `BREAK_AFTER_CYCLE` | Пауза между циклами (сек) |
+| `REQUIRE_ADMIN` | `true` = только чаты где вы админ |
+| `ALLOWED_CHATS` | Опциональный белый список |
+
+## accounts.json — для 2+ аккаунтов
+
+Если `SESSION_NAME` в `.env` **пустой**, используется `accounts.json`.
+Значения из `.env` подставляются как defaults для всех аккаунтов.
 
 ## Безопасность
 
