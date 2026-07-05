@@ -79,23 +79,50 @@ def save_state(state: dict) -> None:
         handle.write("\n")
 
 
-def append_allowed_chats(name: str | None, chats: list[str]) -> int:
-    payload = load_accounts_raw()
+def _merge_list_field(payload: dict, name: str | None, field: str, items: list[str]) -> int:
     if name:
         account = find_account(payload, name)
         if account is None:
             raise ValueError(f"Аккаунт '{name}' не найден")
-        current = account.get("allowed_chats") or []
-        if isinstance(current, str):
-            current = [part.strip() for part in current.split(",") if part.strip()]
-        merged = list(dict.fromkeys([*current, *chats]))
-        account["allowed_chats"] = merged
+        scope = account
     else:
-        defaults = payload.setdefault("defaults", {})
-        current = defaults.get("allowed_chats") or []
-        if isinstance(current, str):
-            current = [part.strip() for part in current.split(",") if part.strip()]
-        merged = list(dict.fromkeys([*current, *chats]))
-        defaults["allowed_chats"] = merged
+        scope = payload.setdefault("defaults", {})
+
+    current = scope.get(field) or []
+    if isinstance(current, str):
+        current = [part.strip() for part in current.split(",") if part.strip()]
+    before = len(current)
+    merged = list(dict.fromkeys([*current, *items]))
+    scope[field] = merged
+    return len(merged) - before
+
+
+def append_allowed_chats(name: str | None, chats: list[str]) -> int:
+    payload = load_accounts_raw()
+    added = _merge_list_field(payload, name, "allowed_chats", chats)
     save_accounts_raw(payload)
-    return len(chats)
+    return added
+
+
+def append_addlists(name: str | None, slugs: list[str]) -> int:
+    payload = load_accounts_raw()
+    added = _merge_list_field(payload, name, "addlists", slugs)
+    save_accounts_raw(payload)
+    return added
+
+
+def chat_counts(name: str | None = None) -> dict:
+    payload = load_accounts_raw()
+    if name:
+        account = find_account(payload, name)
+        scope = account or {}
+    else:
+        scope = payload.get("defaults", {})
+
+    chats = scope.get("allowed_chats") or []
+    addlists = scope.get("addlists") or []
+    if isinstance(chats, str):
+        chats = [part.strip() for part in chats.split(",") if part.strip()]
+    if isinstance(addlists, str):
+        addlists = [part.strip() for part in addlists.split(",") if part.strip()]
+    return {"chats": len(chats), "addlists": len(addlists)}

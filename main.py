@@ -3,6 +3,7 @@ import argparse
 import asyncio
 import logging
 import sys
+from pathlib import Path
 
 from dataclasses import replace
 
@@ -56,11 +57,37 @@ def main() -> None:
         help="Сколько аккаунтов нужно для N чатов",
     )
     parser.add_argument(
+        "--import-chats",
+        metavar="FILE",
+        help="Импорт чатов и addlist-папок из .txt в accounts.json",
+    )
+    parser.add_argument(
+        "--import-target",
+        metavar="NAME",
+        help="Куда импортировать: defaults или имя аккаунта",
+    )
+    parser.add_argument(
         "--bot",
         action="store_true",
         help="Запустить admin-бота (aiogram)",
     )
     args = parser.parse_args()
+
+    if args.import_chats:
+        from import_chats import import_from_file
+
+        target = args.import_target.strip() if args.import_target else None
+        info = import_from_file(Path(args.import_chats), target=target)
+        print(
+            f"Файл: {info.get('file', args.import_chats)}\n"
+            f"URL в тексте: {info['raw_urls']}\n"
+            f"Новых чатов: {info['new_chats']}\n"
+            f"Новых addlist: {info['new_addlists']}\n"
+            f"Всего чатов: {info['total_chats']}\n"
+            f"Всего addlist: {info['total_addlists']}\n"
+            f"Куда: {info['target']}"
+        )
+        return
 
     if args.calc is not None:
         from blocked_chats import estimate_accounts

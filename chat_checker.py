@@ -13,7 +13,7 @@ from telethon.errors import (
 
 from blocked_chats import block_chat, is_blocked
 from config import AccountSettings
-from permissions import ChatPermissionInfo, inspect_chat_permissions, iter_allowed_chats
+from permissions import ChatPermissionInfo, effective_allowed_chats, inspect_chat_permissions, iter_allowed_chats
 
 logger = logging.getLogger(__name__)
 
@@ -74,12 +74,13 @@ async def check_allowed_list_tokens(
     client: TelegramClient,
     settings: AccountSettings,
 ) -> tuple[int, int, int]:
-    if not settings.allowed_chats:
+    allowed = await effective_allowed_chats(client, settings)
+    if not allowed:
         return 0, 0, 0
 
     ok_count = 0
     bad_count = 0
-    for token in settings.allowed_chats:
+    for token in allowed:
         label = token
         try:
             entity = await client.get_entity(token)

@@ -19,9 +19,11 @@ from aiogram.types import (
 
 from blocked_chats import blocked_count, estimate_accounts
 from config import load_app_config
+from import_chats import import_from_text
 from proxy import parse_socks5_proxy
 from storage import (
     append_allowed_chats,
+    chat_counts,
     find_account,
     get_admin_ids,
     load_accounts_raw,
@@ -30,7 +32,7 @@ from storage import (
     update_account,
     update_defaults,
 )
-from text_utils import extract_chat_tokens, mask_proxy_string, proxy_to_string
+from text_utils import extract_chat_tokens, mask_proxy_string, parse_chat_text, proxy_to_string
 
 logger = logging.getLogger(__name__)
 MAIN_SCRIPT = Path(__file__).resolve().parent / "main.py"
@@ -97,6 +99,8 @@ def _format_status() -> str:
             f"👤 Аккаунтов: <b>{len(config.accounts)}</b>",
             f"🔐 Сессии: <b>{sessions_ok}/{len(config.accounts)}</b>",
             f"⚙️ Режим: {mode}",
+            f"📁 Чатов в базе: <b>{chat_counts()['chats']}</b>",
+            f"📂 Addlist-папок: <b>{chat_counts()['addlists']}</b>",
             f"🚫 В блоке: <b>{blocked_count()}</b> чатов",
             "",
         ]
@@ -165,8 +169,21 @@ def _help_text() -> str:
         "<b>Калькулятор</b>\n"
         "<code>/calc 3000</code> — сколько аккаунтов нужно\n\n"
         "<b>Файл .txt</b>\n"
-        "Отправьте список чатов.\n"
+        "Отправьте список чатов или вставьте текст с t.me ссылками.\n"
         "Подпись: <code>acc1</code> или пусто."
+    )
+
+
+def _format_import_result(info: dict) -> str:
+    return (
+        "✅ <b>База обновлена</b>\n"
+        f"{SEP}\n"
+        f"🔗 URL в тексте: <b>{info['raw_urls']}</b>\n"
+        f"➕ Новых чатов: <b>{info['new_chats']}</b>\n"
+        f"➕ Новых addlist: <b>{info['new_addlists']}</b>\n"
+        f"📁 Всего чатов: <b>{info['total_chats']}</b>\n"
+        f"📂 Всего addlist: <b>{info['total_addlists']}</b>\n"
+        f"🎯 Куда: <code>{html.escape(info['target'])}</code>"
     )
 
 
@@ -488,18 +505,23 @@ def create_dispatcher() -> Dispatcher:
 
         file = await bot.get_file(message.document.file_id)
         buffer = await bot.download_file(file.file_path)
-        chats = extract_chat_tokens(buffer.read().decode("utf-8", errors="replace"))
-        if not chats:
-            await _answer(message, "❌ Чаты не найдены в файле", _back_keyboard())
-            return
+        text = buffer.read().decode("utf-8", errors="replace")
+        target = (message.caption or "").strip() or None
+        info = import_from_text(text, target=target)
+        await _answer(message, _format_import_result(info), _back_keyboard())
 
-        target = (message.caption or "").strip() or "defaults"
-        added = append_allowed_chats(None if target == "defaults" else target, chats)
-        await _answer(
-            message,
-            f"✅ <b>Загружено</b>\n{SEP}\n📁 Чатов: <b>{added}</b>\n🎯 Куда: <code>{html.escape(target)}</code>",
-            _back_keyboard(),
-        )
+    @dp.message(F.text)
+    async def on_text(message: Message) -> None:
+        if not _is_admin(message.from_user.id):
+            return
+        text = message.text or ""
+        if text.startswith("/"):
+            return
+        parsed = parse_chat_text(text)
+        if not parsed["chats"] and not parsed["addlists"]:
+            return
+        info = import_from_text(text)
+        await _answer(message, _format_import_result(info), _back_keyboard())
 
     return dp
 

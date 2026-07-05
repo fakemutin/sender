@@ -4,8 +4,20 @@ from dataclasses import dataclass
 from telethon import TelegramClient
 from telethon.tl.types import Channel, User
 
+from addlist_resolver import resolve_addlist_slugs
 from blocked_chats import is_blocked
 from config import AccountSettings
+
+
+async def effective_allowed_chats(
+    client: TelegramClient,
+    settings: AccountSettings,
+) -> frozenset[str]:
+    tokens = set(settings.allowed_chats)
+    if settings.addlists:
+        resolved, _ = await resolve_addlist_slugs(client, settings.addlists)
+        tokens.update(resolved)
+    return frozenset(tokens)
 
 
 @dataclass
@@ -90,6 +102,7 @@ async def iter_allowed_chats(
     client: TelegramClient,
     settings: AccountSettings,
 ) -> AsyncIterator[ChatPermissionInfo]:
+    allowed = await effective_allowed_chats(client, settings)
     async for dialog in client.iter_dialogs():
         if not (dialog.is_group or dialog.is_channel):
             continue
@@ -98,7 +111,7 @@ async def iter_allowed_chats(
             client,
             dialog,
             require_admin=settings.require_admin,
-            allowed_chats=settings.allowed_chats,
+            allowed_chats=allowed,
         )
         if not info.allowed:
             continue

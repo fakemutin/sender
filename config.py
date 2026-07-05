@@ -24,7 +24,7 @@ def _env_int(name: str, default: int) -> int:
     return int(value)
 
 
-def _parse_allowed_chats(raw: str | list | None) -> frozenset[str]:
+def _parse_string_list(raw: str | list | None) -> frozenset[str]:
     if raw is None:
         return frozenset()
     if isinstance(raw, list):
@@ -38,6 +38,32 @@ def _parse_allowed_chats(raw: str | list | None) -> frozenset[str]:
     )
 
 
+def _parse_allowed_chats(raw: str | list | None) -> frozenset[str]:
+    return _parse_string_list(raw)
+
+
+def _parse_addlists(raw: str | list | None) -> frozenset[str]:
+    return _parse_string_list(raw)
+
+
+def _load_accounts_sidecar() -> dict:
+    path = Path(os.getenv("ACCOUNTS_FILE", "accounts.json"))
+    if not path.exists():
+        return {}
+    with path.open(encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def _merge_sidecar_defaults(sidecar: dict, env: dict) -> dict:
+    merged = {**sidecar, **env}
+    for field in ("allowed_chats", "addlists"):
+        env_value = env.get(field)
+        if env_value in (None, "", []):
+            if sidecar.get(field):
+                merged[field] = sidecar[field]
+    return merged
+
+
 @dataclass(frozen=True)
 class AccountSettings:
     name: str
@@ -49,6 +75,7 @@ class AccountSettings:
     delay_between_chats: int
     require_admin: bool
     allowed_chats: frozenset[str]
+    addlists: frozenset[str]
     proxy: Socks5Proxy | None = None
     enabled: bool = True
 
@@ -106,6 +133,7 @@ def _build_account(name: str, data: dict, defaults: dict, api_id: int, api_hash:
         delay_between_chats=int(merged.get("delay_between_chats", 120)),
         require_admin=bool(merged.get("require_admin", True)),
         allowed_chats=_parse_allowed_chats(merged.get("allowed_chats")),
+        addlists=_parse_addlists(merged.get("addlists")),
         proxy=proxy,
         enabled=bool(merged.get("enabled", True)),
     )
@@ -150,7 +178,10 @@ def load_app_config() -> AppConfig:
 
     # Старый режим: все переменные в .env (приоритет)
     if env_defaults["session_name"]:
-        account = _build_account("default", env_defaults, {}, api_id, api_hash)
+        sidecar = _load_accounts_sidecar()
+        sidecar_defaults = sidecar.get("defaults", {})
+        merged_env = _merge_sidecar_defaults(sidecar_defaults, env_defaults)
+        account = _build_account("default", merged_env, {}, api_id, api_hash)
         return AppConfig(
             accounts=(account,),
             delay_between_accounts=_env_int("DELAY_BETWEEN_ACCOUNTS", 300),
