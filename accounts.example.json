@@ -9,11 +9,10 @@
   },
   "accounts": [
     {
-      "name": "acc1",
+      "name": "main",
       "session_name": "+79001111111",
       "source_chat": "your_channel",
       "source_message_id": 13,
-      "proxy": "socks5://user1:pass1@1.2.3.4:1080",
       "enabled": true
     },
     {
