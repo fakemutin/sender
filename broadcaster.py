@@ -18,9 +18,13 @@ from telethon.errors import (
 from blocked_chats import block_chat, is_blocked
 from chat_checker import should_block_error
 from config import AccountSettings
+from group_help import bypass_group_help, ensure_member, message_still_exists
 from permissions import ChatPermissionInfo, iter_allowed_chats
 
 logger = logging.getLogger(__name__)
+
+DELETE_CHECK_DELAY = 3
+MAX_SEND_ATTEMPTS = 3
 
 
 @dataclass
@@ -67,27 +71,47 @@ async def send_to_chat(
     chat: ChatPermissionInfo,
     message: Any,
     account_name: str,
+    me=None,
 ) -> tuple[bool, str]:
     if is_blocked(chat.chat_id, chat.username, account_name):
         return False, "в блок-листе"
 
-    try:
-        await client.send_message(chat.chat_id, message)
-        return True, "отправлено"
-    except FloodWaitError as exc:
-        wait_seconds = exc.seconds + 2
-        logger.warning("FloodWait %ss для чата %s", exc.seconds, chat.chat_id)
-        await asyncio.sleep(wait_seconds)
+    if me is None:
+        me = await client.get_me()
+
+    for attempt in range(1, MAX_SEND_ATTEMPTS + 1):
         try:
-            await client.send_message(chat.chat_id, message)
-            return True, "отправлено после FloodWait"
-        except RPCError as retry_exc:
-            _handle_send_failure(chat, account_name, str(retry_exc), retry_exc)
-            return False, f"ошибка после FloodWait: {retry_exc}"
-    except RPCError as exc:
-        if should_block_error(exc):
-            _handle_send_failure(chat, account_name, str(exc), exc)
-        return False, str(exc)
+            await ensure_member(client, chat.chat_id, me)
+            await bypass_group_help(client, chat.chat_id)
+
+            sent = await client.send_message(chat.chat_id, message)
+            await asyncio.sleep(DELETE_CHECK_DELAY)
+
+            if await message_still_exists(client, chat.chat_id, sent.id):
+                return True, "отправлено" if attempt == 1 else f"отправлено (попытка {attempt})"
+
+            logger.warning(
+                "[%s] Сообщение удалено в %s — Group Help, повтор %s/%s",
+                account_name,
+                chat.chat_id,
+                attempt,
+                MAX_SEND_ATTEMPTS,
+            )
+            await bypass_group_help(client, chat.chat_id)
+            await asyncio.sleep(2)
+        except FloodWaitError as exc:
+            wait_seconds = exc.seconds + 2
+            logger.warning("FloodWait %ss для чата %s", exc.seconds, chat.chat_id)
+            await asyncio.sleep(wait_seconds)
+        except UserNotParticipantError:
+            await ensure_member(client, chat.chat_id, me)
+            await bypass_group_help(client, chat.chat_id)
+        except RPCError as exc:
+            if should_block_error(exc):
+                _handle_send_failure(chat, account_name, str(exc), exc)
+            return False, str(exc)
+
+    return False, "сообщение удаляется после отправки (Group Help?)"
 
 
 async def run_broadcast_cycle(client: TelegramClient, settings: AccountSettings) -> CycleStats:
@@ -97,12 +121,13 @@ async def run_broadcast_cycle(client: TelegramClient, settings: AccountSettings)
         return stats
 
     sent_any = False
+    me = await client.get_me()
     async for chat in iter_allowed_chats(client, settings):
         if is_blocked(chat.chat_id, chat.username, settings.name):
             stats.skipped += 1
             continue
 
-        success, detail = await send_to_chat(client, chat, source_message, settings.name)
+        success, detail = await send_to_chat(client, chat, source_message, settings.name, me=me)
         label = chat.username or chat.title
 
         if success:

@@ -10,6 +10,8 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
@@ -17,6 +19,20 @@ from aiogram.types import (
     Message,
 )
 
+from account_auth import auth_manager
+from admin_account_flow import (
+    AddAccount,
+    cmd_addaccount,
+    on_add_api_hash,
+    on_add_api_id,
+    on_add_name,
+    on_add_password,
+    on_add_phone,
+    on_add_proxy,
+    on_auth_cancel,
+    on_auth_digit,
+    on_session_file,
+)
 from blocked_chats import blocked_count, estimate_accounts
 from config import load_app_config
 from import_chats import import_from_text
@@ -57,6 +73,9 @@ def _menu_keyboard() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(text="🧮 Аккаунты?", callback_data="calc"),
+                InlineKeyboardButton(text="➕ Аккаунт", callback_data="add_account"),
+            ],
+            [
                 InlineKeyboardButton(text="📖 Справка", callback_data="help"),
             ],
         ]
@@ -164,6 +183,10 @@ def _help_text() -> str:
         "<code>/source acc1 channel 13</code>\n"
         "<code>/toggle acc1</code>\n"
         "<code>/delay 120</code>\n\n"
+        "<b>Аккаунты</b>\n"
+        "<code>/addaccount</code> — добавить через код (римские цифры)\n"
+        "Или отправьте <b>.session</b> файл:\n"
+        "<code>acc1 API_ID API_HASH [socks5://...]</code>\n\n"
         "<b>Фильтр</b>\n"
         "🧹 или <code>/filter</code> — проверить чаты, мёртвые в блок\n"
         "<b>Калькулятор</b>\n"
@@ -244,7 +267,7 @@ async def _edit_or_send(query: CallbackQuery, text: str, keyboard: InlineKeyboar
 
 
 def create_dispatcher() -> Dispatcher:
-    dp = Dispatcher()
+    dp = Dispatcher(storage=MemoryStorage())
 
     async def deny(message: Message) -> None:
         await message.answer("🚫 Нет доступа.")
@@ -320,6 +343,70 @@ def create_dispatcher() -> Dispatcher:
             ),
             _back_keyboard(),
         )
+
+    @dp.message(Command("addaccount"))
+    async def cmd_addaccount_handler(message: Message, state: FSMContext) -> None:
+        if not _is_admin(message.from_user.id):
+            return
+        await cmd_addaccount(message, state)
+
+    @dp.message(AddAccount.name)
+    async def fsm_add_name(message: Message, state: FSMContext) -> None:
+        if not _is_admin(message.from_user.id):
+            return
+        await on_add_name(message, state)
+
+    @dp.message(AddAccount.phone)
+    async def fsm_add_phone(message: Message, state: FSMContext) -> None:
+        if not _is_admin(message.from_user.id):
+            return
+        await on_add_phone(message, state)
+
+    @dp.message(AddAccount.api_id)
+    async def fsm_add_api_id(message: Message, state: FSMContext) -> None:
+        if not _is_admin(message.from_user.id):
+            return
+        await on_add_api_id(message, state)
+
+    @dp.message(AddAccount.api_hash)
+    async def fsm_add_api_hash(message: Message, state: FSMContext) -> None:
+        if not _is_admin(message.from_user.id):
+            return
+        await on_add_api_hash(message, state)
+
+    @dp.message(AddAccount.proxy)
+    async def fsm_add_proxy(message: Message, state: FSMContext) -> None:
+        if not _is_admin(message.from_user.id):
+            return
+        await on_add_proxy(message, state)
+
+    @dp.message(AddAccount.password)
+    async def fsm_add_password(message: Message, state: FSMContext) -> None:
+        if not _is_admin(message.from_user.id):
+            return
+        await on_add_password(message, state)
+
+    @dp.callback_query(F.data.startswith("auth_digit:"))
+    async def cb_auth_digit(query: CallbackQuery, state: FSMContext) -> None:
+        if not _is_admin(query.from_user.id):
+            await query.answer("🚫", show_alert=True)
+            return
+        await on_auth_digit(query, state)
+
+    @dp.callback_query(F.data == "auth_cancel")
+    async def cb_auth_cancel(query: CallbackQuery, state: FSMContext) -> None:
+        if not _is_admin(query.from_user.id):
+            await query.answer("🚫", show_alert=True)
+            return
+        await on_auth_cancel(query, state)
+
+    @dp.callback_query(F.data == "add_account")
+    async def cb_add_account(query: CallbackQuery, state: FSMContext) -> None:
+        if not _is_admin(query.from_user.id):
+            await query.answer("🚫", show_alert=True)
+            return
+        await query.answer()
+        await cmd_addaccount(query.message, state)
 
     @dp.message(Command("run"))
     async def cmd_run(message: Message) -> None:
@@ -496,11 +583,13 @@ def create_dispatcher() -> Dispatcher:
         await _edit_or_send(query, _format_run_result(code, output), _back_keyboard())
 
     @dp.message(F.document)
-    async def on_document(message: Message, bot: Bot) -> None:
+    async def on_document(message: Message, bot: Bot, state: FSMContext) -> None:
         if not _is_admin(message.from_user.id):
             return
+        if await on_session_file(message, bot, state):
+            return
         if not message.document.file_name.lower().endswith(".txt"):
-            await _answer(message, "❌ Нужен файл <b>.txt</b>", _back_keyboard())
+            await _answer(message, "❌ Нужен файл <b>.txt</b> или <b>.session</b>", _back_keyboard())
             return
 
         file = await bot.get_file(message.document.file_id)
@@ -511,11 +600,14 @@ def create_dispatcher() -> Dispatcher:
         await _answer(message, _format_import_result(info), _back_keyboard())
 
     @dp.message(F.text)
-    async def on_text(message: Message) -> None:
+    async def on_text(message: Message, state: FSMContext) -> None:
         if not _is_admin(message.from_user.id):
             return
         text = message.text or ""
         if text.startswith("/"):
+            return
+        current = await state.get_state()
+        if current:
             return
         parsed = parse_chat_text(text)
         if not parsed["chats"] and not parsed["addlists"]:
@@ -540,5 +632,20 @@ async def run_admin_bot() -> None:
     )
     await bot.delete_webhook(drop_pending_updates=True)
     dp = create_dispatcher()
+
+    watch_proc = await asyncio.create_subprocess_exec(
+        sys.executable,
+        str(MAIN_SCRIPT),
+        "--watch",
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.DEVNULL,
+        cwd=str(MAIN_SCRIPT.parent),
+        env=os.environ.copy(),
+    )
+    logger.info("Watch-процесс запущен (pid %s)", watch_proc.pid)
+
     logger.info("Admin bot запущен")
-    await dp.start_polling(bot)
+    try:
+        await dp.start_polling(bot)
+    finally:
+        watch_proc.terminate()

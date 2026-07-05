@@ -203,3 +203,22 @@ async def run_loop(config: AppConfig, accounts: tuple[AccountSettings, ...], onc
             round(config.break_after_cycle / 3600, 1),
         )
         await asyncio.sleep(config.break_after_cycle)
+
+
+async def run_account_watch(account: AccountSettings) -> None:
+    from mention_handler import register_mention_handler
+
+    async with account_session(account) as client:
+        if client is None:
+            return
+        await register_mention_handler(client)
+        logger.info("[%s] Слушаю пинги (автовход + Group Help)", account.name)
+        await client.run_until_disconnected()
+
+
+async def run_all_accounts_watch(config: AppConfig, accounts: tuple[AccountSettings, ...]) -> None:
+    if config.parallel_accounts:
+        await asyncio.gather(*(run_account_watch(account) for account in accounts))
+    else:
+        for account in accounts:
+            await run_account_watch(account)

@@ -8,7 +8,7 @@ from pathlib import Path
 from dataclasses import replace
 
 from config import filter_accounts, load_app_config
-from runner import run_all_accounts_filter, run_all_accounts_list, run_loop
+from runner import run_all_accounts_filter, run_all_accounts_list, run_all_accounts_watch, run_loop
 
 logging.getLogger("telethon").setLevel(logging.CRITICAL)
 
@@ -71,6 +71,11 @@ def main() -> None:
         action="store_true",
         help="Запустить admin-бота (aiogram)",
     )
+    parser.add_argument(
+        "--watch",
+        action="store_true",
+        help="Слушать пинги: автовход в чаты + Group Help",
+    )
     args = parser.parse_args()
 
     if args.import_chats:
@@ -127,6 +132,8 @@ def main() -> None:
         asyncio.run(run_all_accounts_list(config, accounts))
     elif args.filter_chats:
         asyncio.run(run_all_accounts_filter(config, accounts))
+    elif args.watch:
+        asyncio.run(run_all_accounts_watch(config, accounts))
     else:
         asyncio.run(run_loop(config, accounts, once=args.once))
 

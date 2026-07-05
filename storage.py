@@ -126,3 +126,43 @@ def chat_counts(name: str | None = None) -> dict:
     if isinstance(addlists, str):
         addlists = [part.strip() for part in addlists.split(",") if part.strip()]
     return {"chats": len(chats), "addlists": len(addlists)}
+
+
+def add_account(
+    name: str,
+    session_name: str,
+    *,
+    api_id: int | None = None,
+    api_hash: str | None = None,
+    proxy: str | None = None,
+    source_chat: str | None = None,
+    source_message_id: int | None = None,
+    enabled: bool = True,
+) -> None:
+    payload = load_accounts_raw()
+    if find_account(payload, name):
+        raise ValueError(f"Аккаунт '{name}' уже существует")
+
+    defaults = payload.setdefault("defaults", {})
+    account = {
+        "name": name,
+        "session_name": session_name,
+        "enabled": enabled,
+    }
+    if api_id is not None:
+        account["api_id"] = api_id
+    if api_hash:
+        account["api_hash"] = api_hash
+    if proxy:
+        account["proxy"] = proxy
+    if source_chat:
+        account["source_chat"] = source_chat
+    elif defaults.get("source_chat"):
+        account["source_chat"] = defaults["source_chat"]
+    if source_message_id is not None:
+        account["source_message_id"] = source_message_id
+    elif defaults.get("source_message_id"):
+        account["source_message_id"] = defaults["source_message_id"]
+
+    payload.setdefault("accounts", []).append(account)
+    save_accounts_raw(payload)

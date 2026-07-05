@@ -175,6 +175,12 @@ def _load_from_accounts_file(path: Path, api_id: int, api_hash: str) -> AppConfi
 def load_app_config() -> AppConfig:
     api_id, api_hash = _require_api_credentials()
     env_defaults = _env_defaults()
+    accounts_file = Path(os.getenv("ACCOUNTS_FILE", "accounts.json"))
+
+    if accounts_file.exists():
+        sidecar = _load_accounts_sidecar()
+        if sidecar.get("accounts"):
+            return _load_from_accounts_file(accounts_file, api_id, api_hash)
 
     # Старый режим: все переменные в .env (приоритет)
     if env_defaults["session_name"]:
@@ -189,7 +195,6 @@ def load_app_config() -> AppConfig:
             parallel_accounts=_env_bool("PARALLEL_ACCOUNTS", True),
         )
 
-    accounts_file = Path(os.getenv("ACCOUNTS_FILE", "accounts.json"))
     if accounts_file.exists():
         return _load_from_accounts_file(accounts_file, api_id, api_hash)
 
