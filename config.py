@@ -55,6 +55,7 @@ class AppConfig:
     accounts: tuple[AccountSettings, ...]
     delay_between_accounts: int
     break_after_cycle: int
+    parallel_accounts: bool
 
 
 def _require_api_credentials() -> tuple[int, str]:
@@ -129,6 +130,9 @@ def _load_from_accounts_file(path: Path, api_id: int, api_hash: str) -> AppConfi
         break_after_cycle=int(
             payload.get("break_after_cycle", _env_int("BREAK_AFTER_CYCLE", 10800))
         ),
+        parallel_accounts=bool(
+            payload.get("parallel_accounts", _env_bool("PARALLEL_ACCOUNTS", True))
+        ),
     )
 
 
@@ -143,6 +147,7 @@ def load_app_config() -> AppConfig:
             accounts=(account,),
             delay_between_accounts=_env_int("DELAY_BETWEEN_ACCOUNTS", 300),
             break_after_cycle=_env_int("BREAK_AFTER_CYCLE", 10800),
+            parallel_accounts=_env_bool("PARALLEL_ACCOUNTS", True),
         )
 
     accounts_file = Path(os.getenv("ACCOUNTS_FILE", "accounts.json"))

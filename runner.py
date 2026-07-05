@@ -104,22 +104,48 @@ async def run_account_once(account: AccountSettings) -> CycleStats:
         return await run_broadcast_cycle(client, account)
 
 
-async def run_all_accounts_once(config: AppConfig, accounts: tuple[AccountSettings, ...]) -> None:
+def _merge_stats(results: list[CycleStats]) -> CycleStats:
     total = CycleStats()
-
-    for index, account in enumerate(accounts):
-        stats = await run_account_once(account)
+    for stats in results:
         total.sent += stats.sent
         total.failed += stats.failed
         total.skipped += stats.skipped
+    return total
 
-        if index < len(accounts) - 1 and stats.skipped == 0:
+
+async def _run_accounts_parallel(
+    accounts: tuple[AccountSettings, ...],
+    worker,
+) -> list:
+    return await asyncio.gather(*(worker(account) for account in accounts))
+
+
+async def _run_accounts_sequential(
+    config: AppConfig,
+    accounts: tuple[AccountSettings, ...],
+    worker,
+) -> list:
+    results = []
+    for index, account in enumerate(accounts):
+        results.append(await worker(account))
+        if index < len(accounts) - 1:
             logger.info(
                 "Пауза %s сек перед следующим аккаунтом...",
                 config.delay_between_accounts,
             )
             await asyncio.sleep(config.delay_between_accounts)
+    return results
 
+
+async def run_all_accounts_once(config: AppConfig, accounts: tuple[AccountSettings, ...]) -> None:
+    if config.parallel_accounts:
+        logger.info("Параллельный запуск %s аккаунтов", len(accounts))
+        results = await _run_accounts_parallel(accounts, run_account_once)
+    else:
+        logger.info("Последовательный запуск %s аккаунтов", len(accounts))
+        results = await _run_accounts_sequential(config, accounts, run_account_once)
+
+    total = _merge_stats(results)
     logger.info(
         "Итого: отправлено %s, ошибок %s, пропущено аккаунтов %s",
         total.sent,
@@ -128,11 +154,13 @@ async def run_all_accounts_once(config: AppConfig, accounts: tuple[AccountSettin
     )
 
 
-async def run_all_accounts_list(accounts: tuple[AccountSettings, ...]) -> None:
-    total = 0
-    for account in accounts:
-        total += await run_account_list(account)
-    print(f"\nВсего разрешённых чатов: {total}")
+async def run_all_accounts_list(config: AppConfig, accounts: tuple[AccountSettings, ...]) -> None:
+    if config.parallel_accounts:
+        results = await _run_accounts_parallel(accounts, run_account_list)
+    else:
+        results = await _run_accounts_sequential(config, accounts, run_account_list)
+
+    print(f"\nВсего разрешённых чатов: {sum(results)}")
 
 
 async def run_loop(config: AppConfig, accounts: tuple[AccountSettings, ...], once: bool) -> None:

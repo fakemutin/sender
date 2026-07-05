@@ -1,4 +1,5 @@
 {
+  "parallel_accounts": true,
   "delay_between_accounts": 300,
   "break_after_cycle": 10800,
   "defaults": {
