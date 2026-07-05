@@ -18,11 +18,12 @@
 ```bash
 pip install -r requirements.txt
 cp .env.example .env
-cp accounts.example.json accounts.json
-# заполните .env и accounts.json
+# заполните .env (SESSION_NAME, SOURCE_CHAT, SOURCE_MESSAGE_ID, ...)
 ```
 
-## Первый вход (для каждого аккаунта)
+Для **2+ аккаунтов** дополнительно: `cp accounts.example.json accounts.json` и оставьте `SESSION_NAME` пустым.
+
+## Первый вход
 
 ```bash
 python -c "
@@ -30,13 +31,13 @@ from telethon.sync import TelegramClient
 import os
 from dotenv import load_dotenv
 load_dotenv()
-client = TelegramClient('+79001111111', int(os.environ['API_ID']), os.environ['API_HASH'])
+client = TelegramClient(os.environ['SESSION_NAME'], int(os.environ['API_ID']), os.environ['API_HASH'])
 client.start()
 client.disconnect()
 "
 ```
 
-Повторите для каждого `session_name` из `accounts.json`.
+Для `accounts.json` — повторите для каждого `session_name`.
 
 ## Запуск
 
