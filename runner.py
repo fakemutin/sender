@@ -52,13 +52,19 @@ def release_account_lock(lock_file: Path | None) -> None:
 
 
 def create_client(account: AccountSettings) -> TelegramClient:
+    kwargs: dict = {
+        "connection_retries": 2,
+        "retry_delay": 1,
+        "sequential_updates": True,
+    }
+    if account.proxy:
+        kwargs["proxy"] = account.proxy.as_telethon_tuple()
+
     return TelegramClient(
         account.session_name,
         account.api_id,
         account.api_hash,
-        connection_retries=2,
-        retry_delay=1,
-        sequential_updates=True,
+        **kwargs,
     )
 
 
@@ -78,11 +84,13 @@ async def account_session(account: AccountSettings):
             return
 
         me = await client.get_me()
+        proxy_info = account.proxy.label() if account.proxy else "без прокси"
         logger.info(
-            "[%s] Подключён: %s (@%s)",
+            "[%s] Подключён: %s (@%s) через %s",
             account.name,
             me.first_name,
             me.username or "без username",
+            proxy_info,
         )
         yield client
     finally:
