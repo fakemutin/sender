@@ -96,15 +96,24 @@ def validate_proxy_required(accounts: tuple, min_accounts: int = 2) -> None:
     if len(enabled) < min_accounts:
         return
 
-    missing = [account.name for account in enabled if account.proxy is None]
-    if missing:
+    without_proxy = [account.name for account in enabled if account.proxy is None]
+    if len(without_proxy) > 1:
         raise RuntimeError(
-            f"Для {len(enabled)} аккаунтов каждому нужен свой SOCKS5 прокси. "
-            f"Не указан у: {', '.join(missing)}"
+            f"Без прокси может быть только 1 аккаунт. Сейчас без прокси: {', '.join(without_proxy)}"
         )
 
-    endpoints = [(account.proxy.host, account.proxy.port) for account in enabled if account.proxy]
+    missing = [account.name for account in enabled if account.proxy is None]
+    with_proxy = [account for account in enabled if account.proxy is not None]
+
+    # 2+ аккаунтов: ровно один может быть без прокси, остальным прокси обязателен
+    if len(enabled) >= 2 and len(with_proxy) < len(enabled) - 1:
+        raise RuntimeError(
+            f"При {len(enabled)} аккаунтах максимум один без прокси. "
+            f"Добавьте SOCKS5: {', '.join(missing)}"
+        )
+
+    endpoints = [(account.proxy.host, account.proxy.port) for account in with_proxy]
     if len(endpoints) != len(set(endpoints)):
         raise RuntimeError(
-            "Каждый аккаунт должен использовать свой SOCKS5 прокси (уникальный host:port)"
+            "Каждый аккаунт с прокси должен иметь уникальный host:port"
         )
