@@ -296,6 +296,7 @@ async def run_admin_bot() -> None:
         logger.warning("ADMIN_IDS пуст — бот доступен всем (небезопасно)")
 
     bot = Bot(token=token)
+    await bot.delete_webhook(drop_pending_updates=True)
     dp = create_dispatcher()
     logger.info("Admin bot запущен")
     await dp.start_polling(bot)
