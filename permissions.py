@@ -1,7 +1,10 @@
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
 from telethon import TelegramClient
 from telethon.tl.types import Channel, User
+
+from config import AccountSettings
 
 
 @dataclass
@@ -82,14 +85,10 @@ async def inspect_chat_permissions(
     return ChatPermissionInfo(chat_id, title, username, False, "отправка сообщений запрещена")
 
 
-async def collect_allowed_chats(
+async def iter_allowed_chats(
     client: TelegramClient,
-    *,
-    require_admin: bool,
-    allowed_chats: frozenset[str],
-) -> list[ChatPermissionInfo]:
-    allowed: list[ChatPermissionInfo] = []
-
+    settings: AccountSettings,
+) -> AsyncIterator[ChatPermissionInfo]:
     async for dialog in client.iter_dialogs():
         if not (dialog.is_group or dialog.is_channel):
             continue
@@ -97,10 +96,8 @@ async def collect_allowed_chats(
         info = await inspect_chat_permissions(
             client,
             dialog,
-            require_admin=require_admin,
-            allowed_chats=allowed_chats,
+            require_admin=settings.require_admin,
+            allowed_chats=settings.allowed_chats,
         )
         if info.allowed:
-            allowed.append(info)
-
-    return allowed
+            yield info

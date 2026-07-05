@@ -4,93 +4,54 @@ import asyncio
 import logging
 import sys
 
-from telethon import TelegramClient
+from config import filter_accounts, load_app_config
+from runner import run_all_accounts_list, run_loop
 
-from broadcaster import list_allowed_chats, run_broadcast_cycle
-from config import load_settings
+logging.getLogger("telethon").setLevel(logging.CRITICAL)
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, __import__("os").getenv("LOG_LEVEL", "INFO").upper(), logging.INFO),
     format="%(asctime)s [%(levelname)s] %(message)s",
     datefmt="%H:%M:%S",
 )
 logger = logging.getLogger("broadcast")
 
 
-async def run_loop(settings, once: bool) -> None:
-    client = TelegramClient(settings.session_name, settings.api_id, settings.api_hash)
-
-    while True:
-        try:
-            await client.start()
-            me = await client.get_me()
-            logger.info(
-                "Аккаунт: %s (@%s)",
-                me.first_name,
-                me.username or "без username",
-            )
-
-            await run_broadcast_cycle(client, settings)
-
-            await client.disconnect()
-
-            if once:
-                break
-
-            logger.info(
-                "Цикл завершён. Следующий через %s сек (%s ч)",
-                settings.break_after_cycle,
-                round(settings.break_after_cycle / 3600, 1),
-            )
-            await asyncio.sleep(settings.break_after_cycle)
-
-        except KeyboardInterrupt:
-            logger.info("Остановка по Ctrl+C")
-            break
-        except Exception as exc:
-            logger.exception("Ошибка цикла: %s", exc)
-            try:
-                await client.disconnect()
-            except Exception:
-                pass
-            if once:
-                raise
-            await asyncio.sleep(30)
-
-
-async def run_list(settings) -> None:
-    client = TelegramClient(settings.session_name, settings.api_id, settings.api_hash)
-    await client.start()
-    await list_allowed_chats(client, settings)
-    await client.disconnect()
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Рассылка с user-аккаунта только в чаты, где разрешена отправка",
+        description="Лёгкая рассылка с 2+ user-аккаунтов только в разрешённые чаты",
     )
     parser.add_argument(
         "--list",
         action="store_true",
-        help="Показать чаты, куда можно отправлять, и выйти",
+        help="Показать разрешённые чаты для выбранных аккаунтов",
     )
     parser.add_argument(
         "--once",
         action="store_true",
-        help="Один цикл рассылки без паузы BREAK_AFTER_CYCLE",
+        help="Один цикл по всем аккаунтам и выход (удобно для cron)",
+    )
+    parser.add_argument(
+        "--account",
+        action="append",
+        metavar="NAME",
+        help="Запустить только указанный аккаунт (можно несколько раз)",
     )
     args = parser.parse_args()
 
     try:
-        settings = load_settings()
+        config = load_app_config()
+        accounts = filter_accounts(config, set(args.account) if args.account else None)
     except RuntimeError as exc:
         logger.error("%s", exc)
         sys.exit(1)
 
+    logger.info("Аккаунтов в работе: %s", ", ".join(account.name for account in accounts))
+
     if args.list:
-        asyncio.run(run_list(settings))
+        asyncio.run(run_all_accounts_list(accounts))
     else:
-        asyncio.run(run_loop(settings, once=args.once))
+        asyncio.run(run_loop(config, accounts, once=args.once))
 
 
 if __name__ == "__main__":

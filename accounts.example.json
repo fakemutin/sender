@@ -1,0 +1,26 @@
+{
+  "delay_between_accounts": 300,
+  "break_after_cycle": 10800,
+  "defaults": {
+    "delay_between_chats": 120,
+    "require_admin": true,
+    "allowed_chats": []
+  },
+  "accounts": [
+    {
+      "name": "acc1",
+      "session_name": "+79001111111",
+      "source_chat": "your_channel",
+      "source_message_id": 13,
+      "enabled": true
+    },
+    {
+      "name": "acc2",
+      "session_name": "+79002222222",
+      "source_chat": "your_channel",
+      "source_message_id": 13,
+      "delay_between_chats": 180,
+      "enabled": true
+    }
+  ]
+}
