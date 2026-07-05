@@ -54,15 +54,51 @@ def _main_keyboard() -> InlineKeyboardMarkup:
 
 
 def _format_accounts_summary() -> str:
-    try:
-        payload = load_accounts_raw()
-    except Exception as exc:
-        return f"Ошибка чтения accounts.json: {exc}"
+    lines: list[str] = []
 
+    try:
+        config = load_app_config()
+        lines.append(f"✅ Конфиг загружен ({len(config.accounts)} акк.)")
+        lines.append(f"parallel: {config.parallel_accounts}")
+        for account in config.accounts:
+            proxy = account.proxy.label() if account.proxy else "—"
+            if account.proxy:
+                proxy = mask_proxy_string(proxy)
+            status = "✅" if account.enabled else "⏸"
+            lines.append(
+                f"\n{status} <b>{account.name}</b>\n"
+                f"  session: <code>{account.session_name}</code>\n"
+                f"  source: {account.source_chat} #{account.source_message_id}\n"
+                f"  proxy: <code>{proxy}</code>"
+            )
+        session_exists = any(
+            Path(f"{a.session_name}.session").exists() for a in config.accounts
+        )
+        if not session_exists:
+            lines.append(
+                "\n⚠️ <b>Файл сессии (.session) не найден на сервере.</b>\n"
+                "Нужно один раз авторизовать аккаунт на этой машине."
+            )
+        return "\n".join(lines)
+    except Exception as exc:
+        lines.append(f"❌ Конфиг: {exc}")
+
+    payload = load_accounts_raw()
+    if payload.get("accounts"):
+        lines.append(_format_accounts_json(payload))
+    else:
+        lines.append(
+            "\naccounts.json пуст.\n"
+            "Заполните .env (SESSION_NAME, API_ID, API_HASH) "
+            "или создайте accounts.json"
+        )
+    return "\n".join(lines)
+
+
+def _format_accounts_json(payload: dict) -> str:
     lines = [
         f"parallel: {payload.get('parallel_accounts', True)}",
-        f"delay_between_chats(default): {payload.get('defaults', {}).get('delay_between_chats', '—')}",
-        "",
+        f"delay: {payload.get('defaults', {}).get('delay_between_chats', '—')}",
     ]
     for account in payload.get("accounts", []):
         proxy = account.get("proxy") or "—"
@@ -70,12 +106,12 @@ def _format_accounts_summary() -> str:
             proxy = mask_proxy_string(proxy)
         status = "✅" if account.get("enabled", True) else "⏸"
         lines.append(
-            f"{status} <b>{account.get('name')}</b>\n"
+            f"\n{status} <b>{account.get('name')}</b>\n"
             f"  session: <code>{account.get('session_name')}</code>\n"
             f"  source: {account.get('source_chat')} #{account.get('source_message_id')}\n"
             f"  proxy: <code>{proxy}</code>"
         )
-    return "\n".join(lines) if lines else "accounts.json пуст"
+    return "\n".join(lines)
 
 
 def _help_text() -> str:
