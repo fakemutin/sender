@@ -51,7 +51,12 @@ def _parse_proxy_value(raw: Any, account_name: str = "import") -> str | None:
     return None
 
 
-def parse_account_json(text: str, *, account_name: str = "import") -> ParsedAccount:
+def parse_account_json(
+    text: str,
+    *,
+    account_name: str = "import",
+    filename: str | None = None,
+) -> ParsedAccount:
     data = json.loads(text)
     if not isinstance(data, dict):
         raise ValueError("JSON должен быть объектом")
@@ -67,12 +72,24 @@ def parse_account_json(text: str, *, account_name: str = "import") -> ParsedAcco
         or data.get("session")
         or data.get("number")
     )
+
+    session_hint = None
+    if filename:
+        stem = Path(filename).stem  # 244424904_f560
+        session_hint = stem.split("_")[0] if stem else None
+
+    if not phone_raw and session_hint:
+        phone_raw = session_hint
+
     if not phone_raw:
-        raise ValueError("В JSON нужен phone или session_file")
+        raise ValueError("В JSON нет phone — укажите в файле или назовите json как номер.session")
 
     phone = _normalize_phone(str(phone_raw))
-    session_file = data.get("session_file") or phone
-    session_name = _normalize_phone(str(session_file))
+    session_file = data.get("session_file") or session_hint or phone
+    if session_file and str(session_file).strip():
+        session_name = _normalize_phone(str(session_file)) if re.sub(r"\D", "", str(session_file)) else str(session_file)
+    else:
+        session_name = phone
 
     proxy = _parse_proxy_value(
         data.get("proxy") or data.get("socks5") or data.get("proxy_str"),

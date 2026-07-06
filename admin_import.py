@@ -70,7 +70,11 @@ async def _finalize_import(user_id: int, pending: dict) -> tuple[bool, str]:
 async def handle_json_file(message: Message, bot, user_id: int, content: bytes) -> bool:
     acc_name, caption_proxy = parse_caption(message.caption)
     try:
-        parsed = parse_account_json(content.decode("utf-8", errors="replace"), account_name=acc_name or "import")
+        parsed = parse_account_json(
+            content.decode("utf-8", errors="replace"),
+            account_name=acc_name or "import",
+            filename=message.document.file_name,
+        )
     except Exception as exc:
         await message.answer(f"❌ JSON: {html.escape(str(exc))}")
         return True
@@ -78,6 +82,13 @@ async def handle_json_file(message: Message, bot, user_id: int, content: bytes) 
     name = acc_name or next_account_name()
     proxy = caption_proxy or parsed.proxy
     session_name = parsed.session_file or parsed.phone
+
+    # Ищем .session на диске: по номеру, по имени json, по seller-id
+    stem = (message.document.file_name or "").replace(".json", "").split("_")[0]
+    for candidate in {session_name, parsed.phone, f"+{stem}", stem}:
+        if candidate and Path(f"{candidate}.session").exists():
+            session_name = candidate if str(candidate).startswith("+") else f"+{candidate}" if candidate.isdigit() else candidate
+            break
 
     pending = get_pending_import(user_id) or {}
     pending.update(
