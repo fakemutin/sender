@@ -166,3 +166,78 @@ def add_account(
 
     payload.setdefault("accounts", []).append(account)
     save_accounts_raw(payload)
+
+
+def upsert_account(
+    name: str,
+    session_name: str,
+    *,
+    api_id: int | None = None,
+    api_hash: str | None = None,
+    proxy: str | None = None,
+    source_chat: str | None = None,
+    source_message_id: int | None = None,
+    enabled: bool = True,
+) -> str:
+    payload = load_accounts_raw()
+    account = find_account(payload, name)
+    if account is None:
+        add_account(
+            name,
+            session_name,
+            api_id=api_id,
+            api_hash=api_hash,
+            proxy=proxy,
+            source_chat=source_chat,
+            source_message_id=source_message_id,
+            enabled=enabled,
+        )
+        return "added"
+
+    account["session_name"] = session_name
+    account["enabled"] = enabled
+    if api_id is not None:
+        account["api_id"] = api_id
+    if api_hash:
+        account["api_hash"] = api_hash
+    if proxy is not None:
+        if proxy:
+            account["proxy"] = proxy
+        else:
+            account.pop("proxy", None)
+    if source_chat:
+        account["source_chat"] = source_chat
+    if source_message_id is not None:
+        account["source_message_id"] = source_message_id
+    save_accounts_raw(payload)
+    return "updated"
+
+
+def get_pending_import(user_id: int) -> dict | None:
+    imports = load_state().get("pending_imports", {})
+    return imports.get(str(user_id))
+
+
+def set_pending_import(user_id: int, data: dict) -> None:
+    state = load_state()
+    imports = state.setdefault("pending_imports", {})
+    imports[str(user_id)] = data
+    state["pending_imports"] = imports
+    save_state(state)
+
+
+def clear_pending_import(user_id: int) -> None:
+    state = load_state()
+    imports = state.get("pending_imports", {})
+    imports.pop(str(user_id), None)
+    state["pending_imports"] = imports
+    save_state(state)
+
+
+def next_account_name() -> str:
+    payload = load_accounts_raw()
+    used = {a.get("name") for a in payload.get("accounts", [])}
+    index = 1
+    while f"acc{index}" in used:
+        index += 1
+    return f"acc{index}"

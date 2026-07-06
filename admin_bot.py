@@ -18,14 +18,16 @@ from aiogram.types import (
 )
 
 from account_auth import auth_manager
+from account_import import format_import_status
+from admin_import import on_account_document, start_import_help
 from admin_account_flow import (
     handle_flow_text,
     on_auth_cancel,
     on_auth_digit,
-    on_session_file,
     start_add_account,
 )
 from flow_state import clear_flow, get_flow
+from storage import clear_pending_import
 from blocked_chats import blocked_count, estimate_accounts
 from config import load_app_config
 from gh_log import format_recent
@@ -66,12 +68,15 @@ def _menu_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="🧹 Фильтр", callback_data="filter"),
             ],
             [
-                InlineKeyboardButton(text="🧮 Аккаунты?", callback_data="calc"),
                 InlineKeyboardButton(text="➕ Аккаунт", callback_data="add_account"),
+                InlineKeyboardButton(text="📦 Импорт", callback_data="import_acc"),
+            ],
+            [
+                InlineKeyboardButton(text="🧮 Аккаунты?", callback_data="calc"),
+                InlineKeyboardButton(text="📖 Справка", callback_data="help"),
             ],
             [
                 InlineKeyboardButton(text="📋 GH лог", callback_data="ghlog"),
-                InlineKeyboardButton(text="📖 Справка", callback_data="help"),
             ],
         ]
     )
@@ -181,9 +186,8 @@ def _help_text() -> str:
         "<b>Group Help</b>\n"
         "<code>/ghlog</code> или 📋 GH лог — что нажимали в чатах\n\n"
         "<b>Аккаунты</b>\n"
-        "<code>/addaccount</code> — добавить через код (римские цифры)\n"
-        "Или отправьте <b>.session</b> файл:\n"
-        "<code>acc1 API_ID API_HASH [socks5://...]</code>\n\n"
+        "<code>/import</code> — json + .session + прокси\n"
+        "<code>/addaccount</code> — вход по коду (римские цифры)\n\n"
         "<b>Фильтр</b>\n"
         "🧹 или <code>/filter</code> — проверить чаты, мёртвые в блок\n"
         "<b>Калькулятор</b>\n"
@@ -348,14 +352,19 @@ def create_dispatcher() -> Dispatcher:
         body = html.escape(format_recent(20))
         await _answer(message, f"📋 <b>Group Help лог</b>\n{SEP}\n<pre>{body}</pre>", _back_keyboard())
 
-    @dp.message(Command("addaccount", "cancel"))
+    @dp.message(Command("addaccount", "cancel", "import"))
     async def cmd_addaccount_handler(message: Message) -> None:
         if not _is_admin(message.from_user.id):
             return
-        if (message.text or "").startswith("/cancel"):
+        cmd = (message.text or "").split()[0].lower()
+        if cmd == "/cancel":
             clear_flow(message.from_user.id)
+            clear_pending_import(message.from_user.id)
             await auth_manager.cancel(message.from_user.id)
-            await _answer(message, "❌ Добавление аккаунта отменено", _back_keyboard())
+            await _answer(message, "❌ Отменено", _back_keyboard())
+            return
+        if cmd == "/import":
+            await start_import_help(message, message.from_user.id)
             return
         await start_add_account(message, message.from_user.id)
 
@@ -381,6 +390,14 @@ def create_dispatcher() -> Dispatcher:
         body = html.escape(format_recent(20))
         await _edit_or_send(query, f"📋 <b>Group Help лог</b>\n{SEP}\n<pre>{body}</pre>", _back_keyboard())
         await query.answer()
+
+    @dp.callback_query(F.data == "import_acc")
+    async def cb_import_acc(query: CallbackQuery) -> None:
+        if not _is_admin(query.from_user.id):
+            await query.answer("🚫", show_alert=True)
+            return
+        await query.answer()
+        await start_import_help(query.message, query.from_user.id)
 
     @dp.callback_query(F.data == "add_account")
     async def cb_add_account(query: CallbackQuery) -> None:
@@ -568,10 +585,16 @@ def create_dispatcher() -> Dispatcher:
     async def on_document(message: Message, bot: Bot) -> None:
         if not _is_admin(message.from_user.id):
             return
-        if await on_session_file(message, bot, message.from_user.id):
+        fname = (message.document.file_name or "").lower()
+        if fname.endswith((".json", ".session")):
+            await on_account_document(message, bot, message.from_user.id)
             return
-        if not message.document.file_name.lower().endswith(".txt"):
-            await _answer(message, "❌ Нужен файл <b>.txt</b> или <b>.session</b>", _back_keyboard())
+        if not fname.endswith(".txt"):
+            await _answer(
+                message,
+                "❌ Файлы: <b>.json</b> + <b>.session</b> или <b>.txt</b> с чатами\n/import — инструкция",
+                _back_keyboard(),
+            )
             return
 
         file = await bot.get_file(message.document.file_id)
@@ -591,6 +614,14 @@ def create_dispatcher() -> Dispatcher:
         if await handle_flow_text(message, message.from_user.id):
             return
         if get_flow(message.from_user.id):
+            return
+        from storage import get_pending_import, set_pending_import
+
+        pending = get_pending_import(message.from_user.id)
+        if pending and not pending.get("has_json") and text.lower().startswith("socks5"):
+            pending["proxy"] = text.strip()
+            set_pending_import(message.from_user.id, pending)
+            await message.answer(f"🧦 Прокси сохранён\n{format_import_status(pending)}", parse_mode="HTML")
             return
         parsed = parse_chat_text(text)
         if not parsed["chats"] and not parsed["addlists"]:

@@ -1,6 +1,5 @@
 import html
 import re
-from pathlib import Path
 
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
@@ -216,47 +215,11 @@ async def on_auth_digit(query: CallbackQuery, user_id: int) -> None:
 
 
 async def on_auth_cancel(query: CallbackQuery, user_id: int) -> None:
+    from storage import clear_pending_import
+
     await auth_manager.cancel(user_id)
     clear_flow(user_id)
+    clear_pending_import(user_id)
     await query.answer("Отменено")
-    await query.message.edit_text("❌ Добавление аккаунта отменено")
+    await query.message.edit_text("❌ Отменено")
 
-
-async def on_session_file(message: Message, bot, user_id: int) -> bool:
-    if not message.document:
-        return False
-    fname = message.document.file_name or ""
-    if not fname.endswith(".session"):
-        return False
-
-    session_name = fname[:-8]
-    caption = (message.caption or "").strip().split()
-    if len(caption) < 3:
-        await message.answer(
-            "❌ Подпись к .session файлу:\n"
-            "<code>acc2 API_ID API_HASH [socks5://...]</code>",
-        )
-        return True
-
-    name, api_id_raw, api_hash = caption[0], caption[1], caption[2]
-    proxy = caption[3] if len(caption) > 3 else None
-
-    file = await bot.get_file(message.document.file_id)
-    buffer = await bot.download_file(file.file_path)
-    Path(f"{session_name}.session").write_bytes(buffer.read())
-
-    add_account(
-        name,
-        session_name,
-        api_id=int(api_id_raw),
-        api_hash=api_hash,
-        proxy=proxy if proxy and proxy != "-" else None,
-    )
-    clear_flow(user_id)
-    await message.answer(
-        f"✅ <b>Session загружен</b>\n"
-        f"{SEP}\n"
-        f"👤 <b>{html.escape(name)}</b>\n"
-        f"📱 <code>{html.escape(session_name)}</code>",
-    )
-    return True
