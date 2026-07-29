@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>FlashSend — BSC Token Sender</title>
+    <title>FlashSend — Multi-Exchange Sender</title>
     <style>
         * {
             margin: 0;
@@ -20,7 +20,6 @@
             overflow-x: hidden;
         }
 
-        /* Анимированный фон */
         body::before {
             content: '';
             position: fixed;
@@ -39,7 +38,6 @@
             50% { transform: translate(10%, -10%) rotate(5deg); opacity: 0.6; }
         }
 
-        /* Glassmorphic контейнер */
         .container {
             max-width: 650px;
             margin: 0 auto;
@@ -47,7 +45,6 @@
             z-index: 2;
         }
 
-        /* Заголовок */
         .header {
             text-align: center;
             margin-bottom: 30px;
@@ -71,7 +68,58 @@
             margin-top: 8px;
         }
 
-        /* Карточка */
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 20px;
+            animation: fadeInUp 0.5s ease;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 14px 10px;
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 20px;
+            background: rgba(15, 20, 35, 0.5);
+            backdrop-filter: blur(10px);
+            color: rgba(255,255,255,0.6);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .tab-btn:hover {
+            background: rgba(255,255,255,0.1);
+            color: white;
+        }
+
+        .tab-btn.active {
+            background: linear-gradient(135deg, rgba(0,255,170,0.2), rgba(0,170,255,0.2));
+            border-color: #00ffaa;
+            color: white;
+            box-shadow: 0 0 20px rgba(0,255,170,0.15);
+        }
+
+        .tab-btn .tab-icon {
+            font-size: 20px;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeInUp 0.3s ease;
+        }
+
+        /* Card */
         .card {
             background: rgba(15, 20, 35, 0.7);
             backdrop-filter: blur(20px);
@@ -83,7 +131,6 @@
             animation: fadeInUp 0.5s ease;
         }
 
-        /* Группы полей */
         .input-group {
             margin-bottom: 24px;
             position: relative;
@@ -104,7 +151,7 @@
             font-size: 18px;
         }
 
-        input, textarea {
+        input, textarea, select {
             width: 100%;
             padding: 14px 18px;
             background: rgba(0,0,0,0.4);
@@ -117,19 +164,31 @@
             backdrop-filter: blur(5px);
         }
 
+        select {
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='white' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 16px center;
+        }
+
+        select option {
+            background: #1a1a2e;
+            color: white;
+        }
+
         textarea {
             resize: vertical;
             font-family: monospace;
         }
 
-        input:focus, textarea:focus {
+        input:focus, textarea:focus, select:focus {
             outline: none;
             border-color: #00ffaa;
             box-shadow: 0 0 0 3px rgba(0,255,170,0.1);
             background: rgba(0,0,0,0.6);
         }
 
-        /* Кнопки */
         .btn {
             width: 100%;
             padding: 14px 20px;
@@ -159,6 +218,28 @@
             box-shadow: 0 8px 25px rgba(0,255,170,0.5);
         }
 
+        .btn-bybit {
+            background: linear-gradient(135deg, #f7a600, #ff6f00);
+            color: #0a0a1a;
+            box-shadow: 0 5px 15px rgba(247,166,0,0.3);
+        }
+
+        .btn-bybit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(247,166,0,0.5);
+        }
+
+        .btn-binance {
+            background: linear-gradient(135deg, #F0B90B, #d4a20a);
+            color: #0a0a1a;
+            box-shadow: 0 5px 15px rgba(240,185,11,0.3);
+        }
+
+        .btn-binance:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(240,185,11,0.5);
+        }
+
         .btn-secondary {
             background: rgba(255,255,255,0.1);
             border: 1px solid rgba(255,255,255,0.2);
@@ -177,7 +258,6 @@
             transform: none;
         }
 
-        /* Результат */
         .result-area {
             margin-top: 24px;
             padding: 20px;
@@ -191,7 +271,14 @@
             color: #ccffdd;
         }
 
-        /* Предупреждение */
+        .result-area.bybit-log {
+            border-left-color: #f7a600;
+        }
+
+        .result-area.binance-log {
+            border-left-color: #F0B90B;
+        }
+
         .warning {
             background: rgba(255,100,0,0.15);
             border: 1px solid rgba(255,100,0,0.3);
@@ -209,7 +296,6 @@
             font-size: 24px;
         }
 
-        /* Анимации */
         @keyframes slideDown {
             from { opacity: 0; transform: translateY(-30px); }
             to { opacity: 1; transform: translateY(0); }
@@ -220,7 +306,6 @@
             to { opacity: 1; transform: translateY(0); }
         }
 
-        /* Скроллбар */
         .result-area::-webkit-scrollbar {
             width: 6px;
         }
@@ -233,7 +318,6 @@
             border-radius: 10px;
         }
 
-        /* Статус */
         .status-badge {
             display: inline-block;
             width: 8px;
@@ -253,7 +337,6 @@
             transform: scale(0.98);
         }
 
-        /* Стили для токена */
         .token-meta {
             display: flex;
             gap: 10px;
@@ -271,6 +354,15 @@
             display: inline-block;
         }
 
+        .row-2 {
+            display: flex;
+            gap: 12px;
+        }
+
+        .row-2 .input-group {
+            flex: 1;
+        }
+
         @media (max-width: 600px) {
             .card {
                 padding: 20px;
@@ -278,86 +370,303 @@
             .logo {
                 font-size: 36px;
             }
+            .tab-btn {
+                font-size: 12px;
+                padding: 12px 6px;
+            }
+            .row-2 {
+                flex-direction: column;
+                gap: 0;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <div class="logo">⚡ FLASHSEND</div>
-            <div class="sub">BSC Token Sender • Auto Gas • Lightning Fast</div>
+            <div class="logo">FLASHSEND</div>
+            <div class="sub">BSC Wallet | Bybit | Binance — Multi-Exchange Sender</div>
         </div>
 
-        <div class="card">
-            <div class="warning">
-                <div class="warning-icon">🔐</div>
-                <div><strong>Безопасность уровня DeFi</strong><br>Сид-фраза НЕ покидает браузер. Газ подбирается автоматически.</div>
-            </div>
-
-            <div class="input-group">
-                <div class="input-label">
-                    <span>🔑</span>
-                    <span>Сид-фраза (12/24 words)</span>
-                </div>
-                <textarea id="seed" rows="3" placeholder="your twelve word seed phrase here..."></textarea>
-                <div class="token-meta">⚠️ Только для локального использования</div>
-            </div>
-
-            <div class="input-group">
-                <div class="input-label">
-                    <span>📄</span>
-                    <span>Адрес контракта токена (BEP-20)</span>
-                </div>
-                <input id="contractAddr" placeholder="0x...">
-            </div>
-
-            <div class="input-group">
-                <div class="input-label">
-                    <span>➡️</span>
-                    <span>Адрес получателя</span>
-                </div>
-                <input id="toAddress" placeholder="0x...">
-            </div>
-
-            <div class="input-group">
-                <div class="input-label">
-                    <span>💎</span>
-                    <span>Количество</span>
-                </div>
-                <input id="amount" type="number" step="any" placeholder="0.00">
-            </div>
-
-            <button class="btn btn-primary" id="sendBtn">
-                <span>🚀</span> SEND TOKENS (AUTO GAS)
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('bsc')">
+                <span class="tab-icon">&#9889;</span>
+                <span>BSC</span>
             </button>
-            <button class="btn btn-secondary" id="sendBnbBtn">
-                <span>🟡</span> SEND NATIVE BNB (AUTO GAS)
+            <button class="tab-btn" onclick="switchTab('bybit')">
+                <span class="tab-icon">&#9651;</span>
+                <span>Bybit</span>
             </button>
+            <button class="tab-btn" onclick="switchTab('binance')">
+                <span class="tab-icon">&#9670;</span>
+                <span>Binance</span>
+            </button>
+        </div>
 
-            <div class="result-area" id="result">
-                <span class="status-badge"></span> Ready to send tokens on BSC...
+        <!-- BSC Tab -->
+        <div class="tab-content active" id="tab-bsc">
+            <div class="card">
+                <div class="warning">
+                    <div class="warning-icon">&#128274;</div>
+                    <div><strong>DeFi Security</strong><br>Seed phrase stays in your browser. Gas is auto-detected.</div>
+                </div>
+
+                <div class="input-group">
+                    <div class="input-label">
+                        <span>&#128273;</span>
+                        <span>Seed Phrase (12/24 words)</span>
+                    </div>
+                    <textarea id="seed" rows="3" placeholder="your twelve word seed phrase here..."></textarea>
+                    <div class="token-meta">Only used locally in browser</div>
+                </div>
+
+                <div class="input-group">
+                    <div class="input-label">
+                        <span>&#128196;</span>
+                        <span>Token Contract Address (BEP-20)</span>
+                    </div>
+                    <input id="contractAddr" placeholder="0x...">
+                </div>
+
+                <div class="input-group">
+                    <div class="input-label">
+                        <span>&#10145;&#65039;</span>
+                        <span>Recipient Address</span>
+                    </div>
+                    <input id="toAddress" placeholder="0x...">
+                </div>
+
+                <div class="input-group">
+                    <div class="input-label">
+                        <span>&#128142;</span>
+                        <span>Amount</span>
+                    </div>
+                    <input id="amount" type="number" step="any" placeholder="0.00">
+                </div>
+
+                <button class="btn btn-primary" id="sendBtn">
+                    &#128640; SEND TOKENS (AUTO GAS)
+                </button>
+                <button class="btn btn-secondary" id="sendBnbBtn">
+                    &#128993; SEND NATIVE BNB (AUTO GAS)
+                </button>
+
+                <div class="result-area" id="result">
+                    <span class="status-badge"></span> Ready to send tokens on BSC...
+                </div>
+            </div>
+        </div>
+
+        <!-- Bybit Tab -->
+        <div class="tab-content" id="tab-bybit">
+            <div class="card">
+                <div class="warning">
+                    <div class="warning-icon">&#9651;</div>
+                    <div><strong>Bybit Withdrawal</strong><br>Withdraw tokens via Bybit API. Keys stay in your browser.</div>
+                </div>
+
+                <div class="row-2">
+                    <div class="input-group">
+                        <div class="input-label">
+                            <span>&#128273;</span>
+                            <span>API Key</span>
+                        </div>
+                        <input id="bybitApiKey" placeholder="Your Bybit API Key">
+                    </div>
+                    <div class="input-group">
+                        <div class="input-label">
+                            <span>&#128274;</span>
+                            <span>API Secret</span>
+                        </div>
+                        <input id="bybitApiSecret" type="password" placeholder="Your Bybit API Secret">
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <div class="input-label">
+                        <span>&#128176;</span>
+                        <span>Coin</span>
+                    </div>
+                    <input id="bybitCoin" placeholder="USDT, BTC, ETH, BNB...">
+                </div>
+
+                <div class="input-group">
+                    <div class="input-label">
+                        <span>&#127760;</span>
+                        <span>Network (chain)</span>
+                    </div>
+                    <input id="bybitChain" placeholder="BSC, ETH, TRC20, SOL...">
+                </div>
+
+                <div class="input-group">
+                    <div class="input-label">
+                        <span>&#10145;&#65039;</span>
+                        <span>Withdrawal Address</span>
+                    </div>
+                    <input id="bybitToAddr" placeholder="0x... or wallet address">
+                </div>
+
+                <div class="input-group">
+                    <div class="input-label">
+                        <span>&#128142;</span>
+                        <span>Amount</span>
+                    </div>
+                    <input id="bybitAmount" type="number" step="any" placeholder="0.00">
+                </div>
+
+                <button class="btn btn-bybit" id="bybitWithdrawBtn">
+                    &#9651; WITHDRAW VIA BYBIT
+                </button>
+
+                <button class="btn btn-secondary" id="bybitBalanceBtn">
+                    &#128176; CHECK BALANCE
+                </button>
+
+                <div class="result-area bybit-log" id="bybitResult">
+                    <span class="status-badge"></span> Bybit API ready...
+                </div>
+            </div>
+        </div>
+
+        <!-- Binance Tab -->
+        <div class="tab-content" id="tab-binance">
+            <div class="card">
+                <div class="warning">
+                    <div class="warning-icon">&#9670;</div>
+                    <div><strong>Binance Withdrawal</strong><br>Withdraw tokens via Binance API. Keys stay in your browser.</div>
+                </div>
+
+                <div class="row-2">
+                    <div class="input-group">
+                        <div class="input-label">
+                            <span>&#128273;</span>
+                            <span>API Key</span>
+                        </div>
+                        <input id="binanceApiKey" placeholder="Your Binance API Key">
+                    </div>
+                    <div class="input-group">
+                        <div class="input-label">
+                            <span>&#128274;</span>
+                            <span>API Secret</span>
+                        </div>
+                        <input id="binanceApiSecret" type="password" placeholder="Your Binance API Secret">
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <div class="input-label">
+                        <span>&#128176;</span>
+                        <span>Coin</span>
+                    </div>
+                    <input id="binanceCoin" placeholder="USDT, BTC, ETH, BNB...">
+                </div>
+
+                <div class="input-group">
+                    <div class="input-label">
+                        <span>&#127760;</span>
+                        <span>Network</span>
+                    </div>
+                    <input id="binanceNetwork" placeholder="BSC, ETH, TRX, SOL...">
+                </div>
+
+                <div class="input-group">
+                    <div class="input-label">
+                        <span>&#10145;&#65039;</span>
+                        <span>Withdrawal Address</span>
+                    </div>
+                    <input id="binanceToAddr" placeholder="0x... or wallet address">
+                </div>
+
+                <div class="input-group">
+                    <div class="input-label">
+                        <span>&#128142;</span>
+                        <span>Amount</span>
+                    </div>
+                    <input id="binanceAmount" type="number" step="any" placeholder="0.00">
+                </div>
+
+                <button class="btn btn-binance" id="binanceWithdrawBtn">
+                    &#9670; WITHDRAW VIA BINANCE
+                </button>
+
+                <button class="btn btn-secondary" id="binanceBalanceBtn">
+                    &#128176; CHECK BALANCE
+                </button>
+
+                <div class="result-area binance-log" id="binanceResult">
+                    <span class="status-badge"></span> Binance API ready...
+                </div>
             </div>
         </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/ethers@6.8.0/dist/ethers.umd.min.js"></script>
     <script>
-        // DOM elements
+        // ========== TAB SWITCHING ==========
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+            document.getElementById('tab-' + tabName).classList.add('active');
+            const tabIndex = { bsc: 0, bybit: 1, binance: 2 };
+            document.querySelectorAll('.tab-btn')[tabIndex[tabName]].classList.add('active');
+        }
+
+        // ========== LOGGING ==========
+        function createLogger(elementId) {
+            const el = document.getElementById(elementId);
+            return function(message, isError) {
+                const time = new Date().toLocaleTimeString();
+                const prefix = isError ? '\u274c' : '\u2705';
+                const color = isError ? '#ff8888' : '#88ffaa';
+                const logLine = '[' + time + '] ' + prefix + ' ' + message;
+                const entry = document.createElement('div');
+                entry.style.color = color;
+                entry.style.marginBottom = '8px';
+                entry.style.fontSize = '12px';
+                entry.style.wordBreak = 'break-all';
+                entry.innerHTML = logLine;
+                el.appendChild(entry);
+                entry.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                if (el.children.length > 50) {
+                    for (let i = 0; i < 10; i++) {
+                        if (el.children[i]) el.children[i].remove();
+                    }
+                }
+                console.log(logLine);
+            };
+        }
+
+        const log = createLogger('result');
+        const bybitLog = createLogger('bybitResult');
+        const binanceLog = createLogger('binanceResult');
+
+        // ========== HMAC-SHA256 SIGNING ==========
+        async function hmacSha256(key, message) {
+            const encoder = new TextEncoder();
+            const keyData = encoder.encode(key);
+            const msgData = encoder.encode(message);
+            const cryptoKey = await crypto.subtle.importKey(
+                'raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+            );
+            const signature = await crypto.subtle.sign('HMAC', cryptoKey, msgData);
+            return Array.from(new Uint8Array(signature)).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        // ========== BSC (existing functionality) ==========
         const seedInput = document.getElementById('seed');
         const contractAddrInput = document.getElementById('contractAddr');
         const toAddressInput = document.getElementById('toAddress');
         const amountInput = document.getElementById('amount');
         const sendBtn = document.getElementById('sendBtn');
         const sendBnbBtn = document.getElementById('sendBnbBtn');
-        const resultDiv = document.getElementById('result');
 
-        // BSC RPC (с фолбэками)
         const BSC_RPCS = [
             'https://bsc-dataseed.binance.org/',
             'https://bsc-dataseed1.binance.org/',
             'https://bsc-dataseed2.binance.org/'
         ];
-        
+
         let currentProvider = null;
 
         function getProvider() {
@@ -366,82 +675,47 @@
             return currentProvider;
         }
 
-        function log(message, isError = false) {
-            const time = new Date().toLocaleTimeString();
-            const prefix = isError ? '❌' : '✅';
-            const color = isError ? '#ff8888' : '#88ffaa';
-            const logLine = `[${time}] ${prefix} ${message}`;
-            
-            const newEntry = document.createElement('div');
-            newEntry.style.color = color;
-            newEntry.style.marginBottom = '8px';
-            newEntry.style.fontSize = '12px';
-            newEntry.style.wordBreak = 'break-all';
-            newEntry.innerHTML = logLine;
-            resultDiv.appendChild(newEntry);
-            
-            newEntry.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            
-            if(resultDiv.children.length > 50) {
-                for(let i = 0; i < 10; i++) {
-                    if(resultDiv.children[i]) resultDiv.children[i].remove();
-                }
-            }
-            
-            console.log(logLine);
-        }
-
         async function getAutoGas(provider) {
             try {
-                // Получаем актуальную цену газа из сети
                 const feeData = await provider.getFeeData();
                 const gasPrice = feeData.gasPrice;
-                
-                // Добавляем 10% для надежности (fast)
                 const boostedGasPrice = (gasPrice * 110n) / 100n;
-                
                 const gasPriceGwei = parseFloat(ethers.formatUnits(boostedGasPrice, 'gwei'));
-                log(`⛽ Авто Gas Price: ${gasPriceGwei.toFixed(2)} Gwei (fast)`);
-                
+                log('\u26fd Avto Gas Price: ' + gasPriceGwei.toFixed(2) + ' Gwei (fast)');
                 return boostedGasPrice;
             } catch(e) {
-                log(`⚠️ Не удалось получить gas price, используем стандартный`, true);
+                log('\u26a0\ufe0f Could not get gas price, using default', true);
                 return ethers.parseUnits('5', 'gwei');
             }
         }
 
         async function estimateTokenGas(contract, from, to, amount) {
             try {
-                // Оценка газа для transfer
                 const gasEstimate = await contract.transfer.estimateGas(to, amount, { from: from });
-                // Добавляем 20% буфера
                 const gasLimit = (gasEstimate * 120n) / 100n;
-                log(`🔧 Оценка газа: ${gasEstimate.toString()} → с буфером: ${gasLimit.toString()}`);
+                log('\ud83d\udd27 Gas estimate: ' + gasEstimate.toString() + ' \u2192 buffered: ' + gasLimit.toString());
                 return gasLimit;
             } catch(e) {
-                log(`⚠️ Не удалось оценить газ, используем лимит 150000`, true);
+                log('\u26a0\ufe0f Could not estimate gas, using 150000', true);
                 return 150000n;
             }
         }
 
         async function getProviderAndWallet() {
             const seed = seedInput.value.trim();
-            if(!seed) {
-                log('Введите сид-фразу', true);
+            if (!seed) {
+                log('Enter seed phrase', true);
                 return null;
             }
-            
             try {
                 const provider = getProvider();
-                // Проверяем соединение
                 await provider.getNetwork();
-                
                 const wallet = ethers.Wallet.fromPhrase(seed);
                 const connectedWallet = wallet.connect(provider);
-                log(`🦊 Кошелёк: ${wallet.address.slice(0,8)}...${wallet.address.slice(-6)}`);
+                log('\ud83e\udd8a Wallet: ' + wallet.address.slice(0,8) + '...' + wallet.address.slice(-6));
                 return { provider, wallet: connectedWallet, address: wallet.address };
             } catch(e) {
-                log(`Ошибка сид-фразы: ${e.message}`, true);
+                log('Seed phrase error: ' + e.message, true);
                 return null;
             }
         }
@@ -450,76 +724,47 @@
             const contractAddr = contractAddrInput.value.trim();
             const toAddress = toAddressInput.value.trim();
             const amountStr = amountInput.value.trim();
-
-            if(!contractAddr || !toAddress || !amountStr) {
-                log('Заполните все поля: контракт, получатель, количество', true);
+            if (!contractAddr || !toAddress || !amountStr) {
+                log('Fill all fields: contract, recipient, amount', true);
                 return;
             }
-
-            // Блокируем кнопку
             sendBtn.disabled = true;
             const originalText = sendBtn.innerHTML;
-            sendBtn.innerHTML = '<span>⏳</span> PROCESSING...';
-
+            sendBtn.innerHTML = '\u23f3 PROCESSING...';
             try {
                 const walletData = await getProviderAndWallet();
-                if(!walletData) {
-                    sendBtn.disabled = false;
-                    sendBtn.innerHTML = originalText;
-                    return;
-                }
-
+                if (!walletData) { sendBtn.disabled = false; sendBtn.innerHTML = originalText; return; }
                 const { wallet: connectedWallet, provider } = walletData;
-
-                log(`🔍 Подключаюсь к токену...`);
-                
+                log('\ud83d\udd0d Connecting to token...');
                 const abi = [
                     "function transfer(address to, uint256 amount) public returns (bool)",
                     "function decimals() view returns (uint8)",
                     "function balanceOf(address owner) view returns (uint256)",
                     "function symbol() view returns (string)"
                 ];
-                
                 const tokenContract = new ethers.Contract(contractAddr, abi, connectedWallet);
-                
-                // Получаем инфу о токене
                 const [decimals, symbol] = await Promise.all([
                     tokenContract.decimals(),
                     tokenContract.symbol().catch(() => 'UNKNOWN')
                 ]);
-                
                 const amountRaw = ethers.parseUnits(amountStr, decimals);
                 const balance = await tokenContract.balanceOf(connectedWallet.address);
-                
-                log(`📊 Токен: ${symbol} (${decimals} decimals)`);
-                log(`💰 Ваш баланс: ${ethers.formatUnits(balance, decimals)} ${symbol}`);
-                
-                if(balance < amountRaw) {
-                    log(`❌ Недостаточно средств. Нужно: ${amountStr} ${symbol}`, true);
-                    sendBtn.disabled = false;
-                    sendBtn.innerHTML = originalText;
-                    return;
+                log('\ud83d\udcca Token: ' + symbol + ' (' + decimals + ' decimals)');
+                log('\ud83d\udcb0 Balance: ' + ethers.formatUnits(balance, decimals) + ' ' + symbol);
+                if (balance < amountRaw) {
+                    log('\u274c Insufficient funds. Need: ' + amountStr + ' ' + symbol, true);
+                    sendBtn.disabled = false; sendBtn.innerHTML = originalText; return;
                 }
-                
-                // Автоматический газ
                 const gasPrice = await getAutoGas(provider);
                 const gasLimit = await estimateTokenGas(tokenContract, connectedWallet.address, toAddress, amountRaw);
-                
-                log(`🚀 Отправляем ${amountStr} ${symbol} на ${toAddress.slice(0,8)}...`);
-                
-                const tx = await tokenContract.transfer(toAddress, amountRaw, {
-                    gasPrice: gasPrice,
-                    gasLimit: gasLimit
-                });
-                
-                log(`📡 TX хэш: ${tx.hash}`);
-                log(`⏳ Ожидание подтверждения...`);
-                
+                log('\ud83d\ude80 Sending ' + amountStr + ' ' + symbol + ' to ' + toAddress.slice(0,8) + '...');
+                const tx = await tokenContract.transfer(toAddress, amountRaw, { gasPrice, gasLimit });
+                log('\ud83d\udce1 TX hash: ' + tx.hash);
+                log('\u23f3 Waiting for confirmation...');
                 await tx.wait(1);
-                log(`🎉 УСПЕШНО! BSCScan: https://bscscan.com/tx/${tx.hash}`);
-                
+                log('\ud83c\udf89 SUCCESS! BSCScan: https://bscscan.com/tx/' + tx.hash);
             } catch(e) {
-                log(`Ошибка: ${e.message || e}`, true);
+                log('Error: ' + (e.message || e), true);
             } finally {
                 sendBtn.disabled = false;
                 sendBtn.innerHTML = originalText;
@@ -529,68 +774,271 @@
         sendBnbBtn.onclick = async () => {
             const toAddress = toAddressInput.value.trim();
             const amountStr = amountInput.value.trim();
-            
-            if(!toAddress || !amountStr) {
-                log('Заполните адрес получателя и количество BNB', true);
+            if (!toAddress || !amountStr) {
+                log('Fill recipient address and BNB amount', true);
                 return;
             }
-            
-            // Блокируем кнопку
             sendBnbBtn.disabled = true;
             const originalText = sendBnbBtn.innerHTML;
-            sendBnbBtn.innerHTML = '<span>⏳</span> SENDING BNB...';
-            
+            sendBnbBtn.innerHTML = '\u23f3 SENDING BNB...';
             try {
                 const walletData = await getProviderAndWallet();
-                if(!walletData) {
-                    sendBnbBtn.disabled = false;
-                    sendBnbBtn.innerHTML = originalText;
-                    return;
-                }
-                
+                if (!walletData) { sendBnbBtn.disabled = false; sendBnbBtn.innerHTML = originalText; return; }
                 const { wallet: connectedWallet, provider } = walletData;
-                
                 const amountBNB = ethers.parseEther(amountStr);
                 const balance = await provider.getBalance(connectedWallet.address);
-                
-                log(`💰 Баланс BNB: ${ethers.formatEther(balance)} BNB`);
-                
-                if(balance < amountBNB) {
-                    log(`❌ Недостаточно BNB. Нужно: ${amountStr} BNB`, true);
-                    sendBnbBtn.disabled = false;
-                    sendBnbBtn.innerHTML = originalText;
-                    return;
+                log('\ud83d\udcb0 BNB Balance: ' + ethers.formatEther(balance) + ' BNB');
+                if (balance < amountBNB) {
+                    log('\u274c Insufficient BNB. Need: ' + amountStr + ' BNB', true);
+                    sendBnbBtn.disabled = false; sendBnbBtn.innerHTML = originalText; return;
                 }
-                
-                // Автоматический газ для BNB
                 const gasPrice = await getAutoGas(provider);
-                const gasLimit = 21000n; // стандарт для BNB перевода
-                
-                log(`🚀 Отправляем ${amountStr} BNB на ${toAddress.slice(0,8)}...`);
-                
-                const tx = await connectedWallet.sendTransaction({
-                    to: toAddress,
-                    value: amountBNB,
-                    gasPrice: gasPrice,
-                    gasLimit: gasLimit
-                });
-                
-                log(`📡 TX: ${tx.hash}`);
+                const gasLimit = 21000n;
+                log('\ud83d\ude80 Sending ' + amountStr + ' BNB to ' + toAddress.slice(0,8) + '...');
+                const tx = await connectedWallet.sendTransaction({ to: toAddress, value: amountBNB, gasPrice, gasLimit });
+                log('\ud83d\udce1 TX: ' + tx.hash);
                 await tx.wait();
-                log(`✅ ${amountStr} BNB отправлено! BSCScan: https://bscscan.com/tx/${tx.hash}`);
-                
+                log('\u2705 ' + amountStr + ' BNB sent! BSCScan: https://bscscan.com/tx/' + tx.hash);
             } catch(e) {
-                log(`Ошибка BNB: ${e.message}`, true);
+                log('BNB Error: ' + e.message, true);
             } finally {
                 sendBnbBtn.disabled = false;
                 sendBnbBtn.innerHTML = originalText;
             }
         };
-        
-        // Приветствие
-        log(`🔥 FLASHSEND v3.0 | AUTO GAS MODE`);
-        log(`💡 Газ подбирается автоматически | BSC Network`);
-        log(`✨ Поддержка BEP-20 токенов и нативного BNB`);
+
+        // ========== BYBIT API ==========
+        const BYBIT_BASE = 'https://api.bybit.com';
+
+        async function bybitRequest(method, endpoint, apiKey, apiSecret, params) {
+            const timestamp = Date.now().toString();
+            const recvWindow = '20000';
+            let queryString = '';
+            let body = '';
+
+            if (method === 'GET' && params) {
+                queryString = new URLSearchParams(params).toString();
+            } else if (method === 'POST' && params) {
+                body = JSON.stringify(params);
+            }
+
+            const preSign = timestamp + apiKey + recvWindow + (method === 'GET' ? queryString : body);
+            const signature = await hmacSha256(apiSecret, preSign);
+
+            const headers = {
+                'X-BAPI-API-KEY': apiKey,
+                'X-BAPI-SIGN': signature,
+                'X-BAPI-SIGN-TYPE': '2',
+                'X-BAPI-TIMESTAMP': timestamp,
+                'X-BAPI-RECV-WINDOW': recvWindow,
+                'Content-Type': 'application/json'
+            };
+
+            const url = BYBIT_BASE + endpoint + (queryString ? '?' + queryString : '');
+            const response = await fetch(url, {
+                method,
+                headers,
+                body: method === 'POST' ? body : undefined
+            });
+            return response.json();
+        }
+
+        document.getElementById('bybitBalanceBtn').onclick = async () => {
+            const apiKey = document.getElementById('bybitApiKey').value.trim();
+            const apiSecret = document.getElementById('bybitApiSecret').value.trim();
+            const coin = document.getElementById('bybitCoin').value.trim().toUpperCase();
+
+            if (!apiKey || !apiSecret) {
+                bybitLog('Enter API Key and Secret', true);
+                return;
+            }
+
+            const btn = document.getElementById('bybitBalanceBtn');
+            btn.disabled = true;
+            btn.innerHTML = '\u23f3 LOADING...';
+
+            try {
+                const params = { accountType: 'UNIFIED' };
+                if (coin) params.coin = coin;
+                const data = await bybitRequest('GET', '/v5/account/wallet-balance', apiKey, apiSecret, params);
+
+                if (data.retCode !== 0) {
+                    bybitLog('API Error: ' + data.retMsg, true);
+                    return;
+                }
+
+                const accounts = data.result.list || [];
+                for (const acc of accounts) {
+                    const coins = acc.coin || [];
+                    for (const c of coins) {
+                        if (parseFloat(c.walletBalance) > 0) {
+                            bybitLog('\ud83d\udcb0 ' + c.coin + ': ' + parseFloat(c.walletBalance).toFixed(6) + ' (available: ' + parseFloat(c.availableToWithdraw || c.free || 0).toFixed(6) + ')');
+                        }
+                    }
+                }
+                bybitLog('\u2705 Balance loaded');
+            } catch(e) {
+                bybitLog('Error: ' + e.message, true);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '\ud83d\udcb0 CHECK BALANCE';
+            }
+        };
+
+        document.getElementById('bybitWithdrawBtn').onclick = async () => {
+            const apiKey = document.getElementById('bybitApiKey').value.trim();
+            const apiSecret = document.getElementById('bybitApiSecret').value.trim();
+            const coin = document.getElementById('bybitCoin').value.trim().toUpperCase();
+            const chain = document.getElementById('bybitChain').value.trim().toUpperCase();
+            const address = document.getElementById('bybitToAddr').value.trim();
+            const amount = document.getElementById('bybitAmount').value.trim();
+
+            if (!apiKey || !apiSecret || !coin || !chain || !address || !amount) {
+                bybitLog('Fill all fields', true);
+                return;
+            }
+
+            const btn = document.getElementById('bybitWithdrawBtn');
+            btn.disabled = true;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '\u23f3 PROCESSING...';
+
+            try {
+                const params = {
+                    coin: coin,
+                    chain: chain,
+                    address: address,
+                    amount: amount,
+                    timestamp: Date.now(),
+                    forceChain: 1,
+                    accountType: 'UNIFIED'
+                };
+
+                bybitLog('\ud83d\ude80 Withdrawing ' + amount + ' ' + coin + ' via ' + chain + ' to ' + address.slice(0,10) + '...');
+
+                const data = await bybitRequest('POST', '/v5/asset/withdraw/create', apiKey, apiSecret, params);
+
+                if (data.retCode !== 0) {
+                    bybitLog('Bybit Error: ' + data.retMsg, true);
+                } else {
+                    bybitLog('\ud83c\udf89 Withdrawal submitted! ID: ' + data.result.id);
+                }
+            } catch(e) {
+                bybitLog('Error: ' + e.message, true);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        };
+
+        // ========== BINANCE API ==========
+        const BINANCE_BASE = 'https://api.binance.com';
+
+        async function binanceRequest(method, endpoint, apiKey, apiSecret, params) {
+            const timestamp = Date.now();
+            params = params || {};
+            params.timestamp = timestamp;
+            params.recvWindow = 20000;
+
+            const queryString = new URLSearchParams(params).toString();
+            const signature = await hmacSha256(apiSecret, queryString);
+
+            const url = BINANCE_BASE + endpoint + '?' + queryString + '&signature=' + signature;
+            const headers = { 'X-MBX-APIKEY': apiKey };
+
+            const response = await fetch(url, { method, headers });
+            return response.json();
+        }
+
+        document.getElementById('binanceBalanceBtn').onclick = async () => {
+            const apiKey = document.getElementById('binanceApiKey').value.trim();
+            const apiSecret = document.getElementById('binanceApiSecret').value.trim();
+
+            if (!apiKey || !apiSecret) {
+                binanceLog('Enter API Key and Secret', true);
+                return;
+            }
+
+            const btn = document.getElementById('binanceBalanceBtn');
+            btn.disabled = true;
+            btn.innerHTML = '\u23f3 LOADING...';
+
+            try {
+                const data = await binanceRequest('GET', '/sapi/v1/capital/config/getall', apiKey, apiSecret, {});
+
+                if (data.code) {
+                    binanceLog('API Error: ' + data.msg, true);
+                    return;
+                }
+
+                for (const asset of data) {
+                    const free = parseFloat(asset.free);
+                    if (free > 0) {
+                        binanceLog('\ud83d\udcb0 ' + asset.coin + ': ' + free.toFixed(6) + ' (free)');
+                    }
+                }
+                binanceLog('\u2705 Balance loaded');
+            } catch(e) {
+                binanceLog('Error: ' + e.message, true);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '\ud83d\udcb0 CHECK BALANCE';
+            }
+        };
+
+        document.getElementById('binanceWithdrawBtn').onclick = async () => {
+            const apiKey = document.getElementById('binanceApiKey').value.trim();
+            const apiSecret = document.getElementById('binanceApiSecret').value.trim();
+            const coin = document.getElementById('binanceCoin').value.trim().toUpperCase();
+            const network = document.getElementById('binanceNetwork').value.trim().toUpperCase();
+            const address = document.getElementById('binanceToAddr').value.trim();
+            const amount = document.getElementById('binanceAmount').value.trim();
+
+            if (!apiKey || !apiSecret || !coin || !network || !address || !amount) {
+                binanceLog('Fill all fields', true);
+                return;
+            }
+
+            const btn = document.getElementById('binanceWithdrawBtn');
+            btn.disabled = true;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '\u23f3 PROCESSING...';
+
+            try {
+                const params = {
+                    coin: coin,
+                    network: network,
+                    address: address,
+                    amount: amount
+                };
+
+                binanceLog('\ud83d\ude80 Withdrawing ' + amount + ' ' + coin + ' via ' + network + ' to ' + address.slice(0,10) + '...');
+
+                const data = await binanceRequest('POST', '/sapi/v1/capital/withdraw/apply', apiKey, apiSecret, params);
+
+                if (data.code) {
+                    binanceLog('Binance Error: ' + data.msg, true);
+                } else {
+                    binanceLog('\ud83c\udf89 Withdrawal submitted! ID: ' + data.id);
+                }
+            } catch(e) {
+                binanceLog('Error: ' + e.message, true);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        };
+
+        // ========== INIT ==========
+        log('\ud83d\udd25 FLASHSEND v4.0 | MULTI-EXCHANGE');
+        log('\ud83d\udca1 BSC Wallet + Bybit + Binance');
+        log('\u2728 BEP-20 tokens, BNB, exchange withdrawals');
+
+        bybitLog('\u26a1 Bybit API v5 ready');
+        bybitLog('\ud83d\udca1 Enter API Key + Secret to start');
+
+        binanceLog('\u26a1 Binance SAPI ready');
+        binanceLog('\ud83d\udca1 Enter API Key + Secret to start');
     </script>
 </body>
 </html>
